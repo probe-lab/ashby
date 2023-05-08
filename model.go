@@ -36,13 +36,36 @@ func (c *PlotConfig) MaybeLookupColor(name string, seriesName string) string {
 	return name
 }
 
+type PlotFrequency string
+
+const (
+	PlotFrequencyWeekly PlotFrequency = "weekly"
+	PlotFrequencyDaily  PlotFrequency = "daily"
+	PlotFrequencyHourly PlotFrequency = "hourly"
+)
+
+func (f PlotFrequency) String() string { return string(f) }
+
+func (f PlotFrequency) Truncate(t time.Time) time.Time {
+	switch f {
+	case PlotFrequencyWeekly:
+		return t.Truncate(7 * 24 * time.Hour)
+	case PlotFrequencyDaily:
+		return t.Truncate(24 * time.Hour)
+	case PlotFrequencyHourly:
+		return t.Truncate(time.Hour)
+	default:
+		panic(fmt.Sprintf("unsupported plot frequency: %q", f))
+	}
+}
+
 type PlotDef struct {
-	Name      string       `yaml:"name"`
-	Frequency string       `yaml:"frequency"`
-	Datasets  []DataSetDef `yaml:"datasets"`
-	Series    []SeriesDef  `yaml:"series"`
-	Scalars   []ScalarDef  `yaml:"scalars"`
-	Layout    grob.Layout  `yaml:"layout"`
+	Name      string        `yaml:"name"`
+	Frequency PlotFrequency `yaml:"frequency"`
+	Datasets  []DataSetDef  `yaml:"datasets"`
+	Series    []SeriesDef   `yaml:"series"`
+	Scalars   []ScalarDef   `yaml:"scalars"`
+	Layout    grob.Layout   `yaml:"layout"`
 }
 
 func (pd *PlotDef) ExecuteTemplates(ctx context.Context, cfg *PlotConfig) error {

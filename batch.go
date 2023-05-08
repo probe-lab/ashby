@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -177,7 +176,6 @@ func Batch(cc *cli.Context) error {
 	}
 
 	infs := os.DirFS(batchOpts.inDir)
-	outfs := os.DirFS(batchOpts.outDir)
 	fnames, err := fs.Glob(infs, "*.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to read input directory: %w", err)
@@ -185,6 +183,13 @@ func Batch(cc *cli.Context) error {
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.SetLimit(batchOpts.concurrency)
+
+	org := new(Organizer)
+	absOutDir, err := filepath.Abs(batchOpts.outDir)
+	if err != nil {
+		return fmt.Errorf("failed to find output directory: %w", err)
+	}
+	org.Base = absOutDir
 
 	for _, fname := range fnames {
 		fname := fname
@@ -199,32 +204,36 @@ func Batch(cc *cli.Context) error {
 				return fmt.Errorf("failed to parse plot definition %q: %w", fname, err)
 			}
 
-			outFname := pd.Name + ".json"
-			outGlob := ""
+			logger := slog.With("name", pd.Name)
+			plotFilename := org.Filename(pd, cfg.BasisTime)
+			logger.Debug("plot filename", "filename", plotFilename)
 
-			if batchOpts.version && pd.Frequency != "" {
-				versionSuffix := ""
-				globSuffix := ""
-				switch strings.ToLower(pd.Frequency) {
-				case "weekly":
-					versionSuffix = "-" + cfg.BasisTime.Truncate(7*24*time.Hour).Format("2006-01-02")
-					globSuffix = "-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
-				case "daily":
-					versionSuffix = "-" + cfg.BasisTime.Truncate(24*time.Hour).Format("2006-01-02")
-					globSuffix = "-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
-				case "hourly":
-					versionSuffix = "-" + cfg.BasisTime.Truncate(time.Hour).Format("2006-01-02-15")
-					globSuffix = "-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
-				default:
-					return fmt.Errorf("unsupported plot frequency: %q", pd.Frequency)
-				}
-
-				outFname = pd.Name + versionSuffix + ".json"
-				outGlob = pd.Name + globSuffix + ".json"
-
+			info, err := os.Lstat(filepath.Join(batchOpts.inDir, fname))
+			if err != nil {
+				return err
 			}
 
-			output := filepath.Join(batchOpts.outDir, outFname)
+			isMissingOrStale, err := org.IsStaleOrMissing(pd, cfg.BasisTime, info.ModTime())
+			if err != nil {
+				logger.Error("failed to determine if plot file needs writing", "error", err)
+			}
+
+			shouldWrite := batchOpts.force || isMissingOrStale
+			if shouldWrite {
+				logger.Debug("plot file should be written")
+			} else {
+				logger.Debug("plot file does not need to be written")
+			}
+
+			isLatest, err := org.IsLatest(pd, cfg.BasisTime)
+			if err != nil {
+				logger.Error("failed to determine if plot file is latest", "error", err)
+			}
+			if isLatest {
+				logger.Debug("plot is latest")
+			} else {
+				logger.Debug("plot is not latest")
+			}
 
 			if err := pd.ExecuteTemplates(ctx, cfg); err != nil {
 				return fmt.Errorf("failed to execute templates for plot definition: %w", err)
@@ -233,7 +242,9 @@ func Batch(cc *cli.Context) error {
 			if batchOpts.validate {
 				fmt.Println("Name: " + pd.Name)
 				fmt.Println("Frequency: " + pd.Frequency)
-				fmt.Println("Output: " + output)
+				fmt.Println("Output: " + org.Filename(pd, cfg.BasisTime))
+				fmt.Printf("Is missing or stale: %v\n", isMissingOrStale)
+				fmt.Printf("Is latest version: %v\n", isLatest)
 
 				fmt.Println("Datasets:")
 				for _, ds := range pd.Datasets {
@@ -247,20 +258,9 @@ func Batch(cc *cli.Context) error {
 				return nil
 			}
 
-			if !batchOpts.force {
-				info, err := os.Lstat(filepath.Join(batchOpts.inDir, fname))
-				if err != nil {
-					return err
-				}
-
-				exists, err := fileExistsAndIsNewerThan(filepath.Join(batchOpts.outDir, outFname), info.ModTime())
-				if err != nil {
-					return err
-				}
-				if exists {
-					slog.Info("skipping plot, output already exists", "name", pd.Name)
-					return nil
-				}
+			if !shouldWrite {
+				slog.Info("skipping plot, output already exists", "name", pd.Name)
+				return nil
 			}
 
 			slog.Info("generating plot", "name", pd.Name)
@@ -296,27 +296,9 @@ func Batch(cc *cli.Context) error {
 				return fmt.Errorf("failed to marshal to json: %w", err)
 			}
 
-			slog.Info("writing plot output", "name", pd.Name, "filename", output)
-			if err := writeOutput(output, data); err != nil {
-				return fmt.Errorf("write output: %w", err)
-			}
-
-			if batchOpts.version && pd.Frequency != "" {
-				// check if this file would sort after all existing files
-				existing, err := fs.Glob(outfs, outGlob)
-				if err != nil {
-					return fmt.Errorf("failed to read existing plots from output directory: %w", err)
-				}
-
-				sort.Strings(existing)
-				// is the last file the one we just wrote? if so then we assume it is latest
-				if existing[len(existing)-1] == outFname {
-					latest := filepath.Join(batchOpts.outDir, pd.Name+"-latest.json")
-					slog.Info("writing plot output", "name", pd.Name, "filename", latest)
-					if err := writeOutput(latest, data); err != nil {
-						return fmt.Errorf("write latest output: %w", err)
-					}
-				}
+			slog.Info("writing plot output", "name", pd.Name, "filename", plotFilename)
+			if err := org.WritePlot(data, pd, cfg.BasisTime); err != nil {
+				return fmt.Errorf("failed to write plot: %w", err)
 			}
 
 			return nil
@@ -355,15 +337,20 @@ func fileExistsAndIsNewerThan(fname string, ts time.Time) (bool, error) {
 }
 
 func writeOutput(fname string, data []byte) error {
+	dir := filepath.Dir(fname)
+	if err := os.MkdirAll(dir, 0o775); err != nil {
+		return fmt.Errorf("make directories: %w", err)
+	}
+
 	f, err := os.Create(fname)
 	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
+		return fmt.Errorf("create file: %w", err)
 	}
 	defer f.Close()
 
 	_, err = fmt.Fprintln(f, string(data))
 	if err != nil {
-		return fmt.Errorf("failed to write output file: %w", err)
+		return fmt.Errorf("write file: %w", err)
 	}
 	return nil
 }
