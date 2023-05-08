@@ -89,7 +89,7 @@ func Plot(cc *cli.Context) error {
 		if strings.HasPrefix(url, "postgres:") {
 			cfg.Sources[name] = NewPgDataSource(url)
 		} else {
-			return fmt.Errorf("unsupported source url: %s", url)
+			return fmt.Errorf("unsupported source url: %q", url)
 		}
 
 	}
