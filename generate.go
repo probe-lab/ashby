@@ -157,6 +157,11 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 					Name: ls.Name,
 					X:    ls.Labels,
 					Y:    ls.Values,
+					Mode: "lines",
+				}
+
+				if ls.SeriesDef.Fill == FillTypeToZero {
+					trace.Fill = "tozeroy"
 				}
 
 				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {

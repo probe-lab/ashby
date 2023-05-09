@@ -199,7 +199,12 @@ func Batch(cc *cli.Context) error {
 				return fmt.Errorf("failed to read plot definition %q: %w", fname, err)
 			}
 
-			pd, err := parsePlotDef(fname, fcontent)
+			templated, err := ExecuteTemplate(ctx, string(fcontent), cfg)
+			if err != nil {
+				return fmt.Errorf("failed to execute templates for plot definition: %w", err)
+			}
+
+			pd, err := parsePlotDef(fname, []byte(templated))
 			if err != nil {
 				return fmt.Errorf("failed to parse plot definition %q: %w", fname, err)
 			}
@@ -233,10 +238,6 @@ func Batch(cc *cli.Context) error {
 				logger.Debug("plot is latest")
 			} else {
 				logger.Debug("plot is not latest")
-			}
-
-			if err := pd.ExecuteTemplates(ctx, cfg); err != nil {
-				return fmt.Errorf("failed to execute templates for plot definition: %w", err)
 			}
 
 			if batchOpts.validate {

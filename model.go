@@ -68,60 +68,17 @@ type PlotDef struct {
 	Layout    grob.Layout   `yaml:"layout"`
 }
 
-func (pd *PlotDef) ExecuteTemplates(ctx context.Context, cfg *PlotConfig) error {
-	for i := range pd.Datasets {
-		if err := pd.Datasets[i].ExecuteTemplates(ctx, cfg); err != nil {
-			return err
-		}
-	}
-
-	// Apply templates to plot titles and axis names
-	if pd.Layout.Title != nil {
-		text, err := ExecuteTemplateGrobString(ctx, pd.Layout.Title.Text, cfg)
-		if err != nil {
-			return fmt.Errorf("failed to expand layout title for plot %q: %w", pd.Name, err)
-		}
-		pd.Layout.Title.Text = text
-	}
-
-	if pd.Layout.Xaxis != nil && pd.Layout.Xaxis.Title != nil {
-		text, err := ExecuteTemplateGrobString(ctx, pd.Layout.Xaxis.Title.Text, cfg)
-		if err != nil {
-			return fmt.Errorf("failed to expand x-axis title for plot %q: %w", pd.Name, err)
-		}
-		pd.Layout.Xaxis.Title.Text = text
-	}
-
-	if pd.Layout.Yaxis != nil && pd.Layout.Yaxis.Title != nil {
-		text, err := ExecuteTemplateGrobString(ctx, pd.Layout.Yaxis.Title.Text, cfg)
-		if err != nil {
-			return fmt.Errorf("failed to expand y-axis title for plot %q: %w", pd.Name, err)
-		}
-		pd.Layout.Yaxis.Title.Text = text
-	}
-
-	return nil
-}
-
 type DataSetDef struct {
 	Name   string `yaml:"name"`
 	Source string `yaml:"source"`
 	Query  string `yaml:"query"`
 }
 
-func (ds *DataSetDef) ExecuteTemplates(ctx context.Context, cfg *PlotConfig) error {
-	q, err := ExecuteTemplate(ctx, ds.Query, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to expand query for dataset %q: %w", ds.Name, err)
-	}
-	ds.Query = q
-	return nil
-}
-
 type SeriesDef struct {
 	Type       SeriesType `yaml:"type"`
 	Name       string     `yaml:"name"` // name of the series
 	Color      string     `yaml:"color"`
+	Fill       FillType   `yaml:"fill"`
 	DataSet    string     `yaml:"dataset"`
 	Labels     string     `yaml:"labels"`     // the name of the field the series should use for labels
 	Values     string     `yaml:"values"`     // the name of the field the series should use for values
@@ -140,6 +97,17 @@ const (
 	SeriesTypeBox  SeriesType = "box"  // vertical box plot
 	SeriesTypeHBox SeriesType = "hbox" // horizontal box plot
 )
+
+func (t SeriesType) String() string { return string(t) }
+
+type FillType string
+
+const (
+	FillTypeNone   FillType = ""
+	FillTypeToZero FillType = "tozero"
+)
+
+func (t FillType) String() string { return string(t) }
 
 type ScalarDef struct {
 	Type          ScalarType `yaml:"type"`
@@ -162,11 +130,16 @@ const (
 	ScalarTypeNumber ScalarType = "number" // display the scalar value as a number
 )
 
+func (t ScalarType) String() string { return string(t) }
+
 type DeltaType string
 
 const (
+	DeltaTypeNone     DeltaType = ""
 	DeltaTypeRelative DeltaType = "relative" // the delta is an absolute value and should be displayed with a relative % change to the scalar
 )
+
+func (t DeltaType) String() string { return string(t) }
 
 type DataSource interface {
 	GetDataSet(ctx context.Context, query string, params ...any) (DataSet, error)

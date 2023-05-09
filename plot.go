@@ -105,12 +105,14 @@ func Plot(cc *cli.Context) error {
 		return fmt.Errorf("failed to read plot definition: %w", err)
 	}
 
-	pd, err := parsePlotDef(fname, fcontent)
+	templated, err := ExecuteTemplate(ctx, string(fcontent), cfg)
+	if err != nil {
+		return fmt.Errorf("failed to execute templates for plot definition: %w", err)
+	}
+
+	pd, err := parsePlotDef(fname, []byte(templated))
 	if err != nil {
 		return fmt.Errorf("failed to parse plot definition: %w", err)
-	}
-	if err := pd.ExecuteTemplates(ctx, cfg); err != nil {
-		return fmt.Errorf("failed to execute templates for plot definition: %w", err)
 	}
 
 	if plotOpts.validate {
@@ -196,6 +198,34 @@ func parsePlotDef(fname string, content []byte) (*PlotDef, error) {
 
 	if pd.Name == "" {
 		pd.Name = plotname(fname)
+	}
+
+	for _, s := range pd.Series {
+		switch s.Type {
+		case SeriesTypeBar, SeriesTypeHBar, SeriesTypeLine, SeriesTypeBox, SeriesTypeHBox:
+		default:
+			return nil, fmt.Errorf("unknown series type: %q", s.Type)
+		}
+
+		switch s.Fill {
+		case FillTypeNone, FillTypeToZero:
+		default:
+			return nil, fmt.Errorf("unknown series fill: %q", s.Fill)
+		}
+	}
+
+	for _, s := range pd.Scalars {
+		switch s.Type {
+		case ScalarTypeNumber:
+		default:
+			return nil, fmt.Errorf("unknown scalar type: %q", s.Type)
+		}
+
+		switch s.DeltaType {
+		case DeltaTypeNone, DeltaTypeRelative:
+		default:
+			return nil, fmt.Errorf("unknown scalar delta type: %q", s.DeltaType)
+		}
 	}
 
 	// annotate series with order in definition

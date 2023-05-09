@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 	"text/template"
 	"time"
 
-	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
+	"github.com/Masterminds/sprig/v3"
 )
 
 func ExecuteTemplate(ctx context.Context, source string, cfg *PlotConfig) (string, error) {
@@ -17,11 +18,17 @@ func ExecuteTemplate(ctx context.Context, source string, cfg *PlotConfig) (strin
 		StartOfWeek time.Time
 	}
 
-	t, err := template.New("").Funcs(template.FuncMap{
-		"timestamptz": pgTimestampTZ,
-		"timestamp":   pgTimestamp,
-		"simpledate":  simpleDateFormat,
-	}).Parse(source)
+	// See http://masterminds.github.io/sprig/
+	fm := sprig.FuncMap()
+	fm["timestamptz"] = pgTimestampTZ
+	fm["timestamp"] = pgTimestamp
+	fm["simpledate"] = simpleDateFormat
+	fm["isodate"] = isoDateFormat
+	fm["dayModify"] = dayModify     // a version of sprig's dateModify that accepts a number of days
+	fm["weekModify"] = weekModify   // a version of sprig's dateModify that accepts a number of weeks
+	fm["monthModify"] = monthModify // a version of sprig's dateModify that accepts a number of months
+
+	t, err := template.New("").Funcs(fm).Parse(source)
 	if err != nil {
 		return "", fmt.Errorf("parse query template: %w", err)
 	}
@@ -59,24 +66,33 @@ func simpleDateFormat(t time.Time) string {
 	return t.Format("2 Jan 2006")
 }
 
-func ExecuteTemplateGrobString(ctx context.Context, str grob.String, cfg *PlotConfig) (grob.String, error) {
-	switch tstr := str.(type) {
-	case string:
-		text, err := ExecuteTemplate(ctx, tstr, cfg)
-		if err != nil {
-			return str, fmt.Errorf("execute template: %w", err)
-		}
-		return text, nil
-	case []string:
-		for i, s := range tstr {
-			text, err := ExecuteTemplate(ctx, s, cfg)
-			if err != nil {
-				return str, fmt.Errorf("execute template: %w", err)
-			}
-			tstr[i] = text
-		}
-		return tstr, nil
+func isoDateFormat(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
+func dayModify(fmt string, date time.Time) time.Time {
+	n, err := strconv.Atoi(fmt)
+	if err != nil {
+		return date
 	}
 
-	return str, nil
+	return date.Add(time.Duration(n) * time.Hour * 24)
+}
+
+func weekModify(fmt string, date time.Time) time.Time {
+	n, err := strconv.Atoi(fmt)
+	if err != nil {
+		return date
+	}
+
+	return date.Add(time.Duration(n) * time.Hour * 24 * 7)
+}
+
+func monthModify(fmt string, date time.Time) time.Time {
+	n, err := strconv.Atoi(fmt)
+	if err != nil {
+		return date
+	}
+
+	return date.AddDate(0, n, 0)
 }
