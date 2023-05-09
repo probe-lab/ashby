@@ -273,7 +273,7 @@ func Batch(cc *cli.Context) error {
 				for {
 					select {
 					case <-t.C:
-						slog.Info("still generating plot", "name", pd.Name, "elapsed", time.Since(start))
+						slog.Info("still generating plot", "name", pd.Name, "elapsed", time.Since(start).Round(time.Second))
 					case <-done:
 						return
 					}

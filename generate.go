@@ -21,7 +21,7 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 			return nil, fmt.Errorf("unknown dataset source: %s", ds.Source)
 		}
 		var err error
-		slog.Debug("getting dataset", "name", ds.Name, "source", ds.Source, "query", ds.Query)
+		slog.Debug("getting dataset", "name", pd.Name, "dataset", ds.Name, "source", ds.Source, "query", ds.Query)
 		dataSets[ds.Name], err = src.GetDataSet(ctx, ds.Query)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get dataset from source %q: %w", ds.Source, err)
