@@ -62,8 +62,8 @@ var batchCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:        "version",
-			Required:    false,
-			Usage:       "Automatically version the plots by appending a relevant date suffix and write most recent plot with '-latest' suffix.",
+			Required:    true,
+			Usage:       "Automatically version the plots by writing to a dated hierarchy.",
 			Destination: &batchOpts.version,
 		},
 		&cli.BoolFlag{
