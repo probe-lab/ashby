@@ -61,10 +61,13 @@ func (p *PgDataSource) GetDataSet(ctx context.Context, query string, params ...a
 var _ DataSet = (*PgDataSet)(nil)
 
 type PgDataSet struct {
-	rows    pgx.Rows
-	rowdata []any
-	fields  map[string]int
-	err     error
+	rows       pgx.Rows
+	rowdata    []any
+	fields     map[string]int
+	cache      [][]any
+	usecache   bool
+	cacheindex int
+	err        error
 }
 
 func (s *PgDataSet) Next() bool {
@@ -72,7 +75,15 @@ func (s *PgDataSet) Next() bool {
 		return false
 	}
 	s.rowdata = nil
-	return s.rows.Next()
+	if !s.usecache {
+		return s.rows.Next()
+	}
+	s.cacheindex++
+	if s.cacheindex >= len(s.cache) {
+		return false
+	}
+	s.rowdata = s.cache[s.cacheindex]
+	return true
 }
 
 func (s *PgDataSet) Err() error {
@@ -83,9 +94,12 @@ func (s *PgDataSet) Err() error {
 }
 
 func (s *PgDataSet) Field(name string) any {
-	s.rowdata, s.err = s.rows.Values()
-	if s.err != nil || s.rowdata == nil {
-		return nil
+	if s.rowdata == nil {
+		s.rowdata, s.err = s.rows.Values()
+		if s.err != nil || s.rowdata == nil {
+			return nil
+		}
+		s.cache = append(s.cache, s.rowdata)
 	}
 	if s.fields == nil {
 		fds := s.rows.FieldDescriptions()
@@ -101,4 +115,11 @@ func (s *PgDataSet) Field(name string) any {
 	}
 
 	return s.rowdata[col]
+}
+
+func (s *PgDataSet) ResetIterator() {
+	if s.cache != nil {
+		s.usecache = true
+		s.cacheindex = -1
+	}
 }

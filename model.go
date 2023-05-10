@@ -63,6 +63,7 @@ type PlotDef struct {
 	Name      string        `yaml:"name"`
 	Frequency PlotFrequency `yaml:"frequency"`
 	Datasets  []DataSetDef  `yaml:"datasets"`
+	Computed  []ComputedDef `yaml:"computed"`
 	Series    []SeriesDef   `yaml:"series"`
 	Scalars   []ScalarDef   `yaml:"scalars"`
 	Layout    grob.Layout   `yaml:"layout"`
@@ -78,6 +79,7 @@ type SeriesDef struct {
 	Type       SeriesType `yaml:"type"`
 	Name       string     `yaml:"name"` // name of the series
 	Color      string     `yaml:"color"`
+	Marker     MarkerType `yaml:"marker"`
 	Fill       FillType   `yaml:"fill"`
 	DataSet    string     `yaml:"dataset"`
 	Labels     string     `yaml:"labels"`     // the name of the field the series should use for labels
@@ -108,6 +110,21 @@ const (
 )
 
 func (t FillType) String() string { return string(t) }
+
+type MarkerType string
+
+const (
+	// Note: this is only a subset of what plotly supports
+	// see https://plotly.com/javascript/reference/scatter/#scatter-marker-symbol
+	MarkerTypeNone     MarkerType = ""
+	MarkerTypeCircle   MarkerType = "circle"
+	MarkerTypeSquare   MarkerType = "square"
+	MarkerTypeDiamond  MarkerType = "diamond"
+	MarkerTypeTriangle MarkerType = "triangle"
+	MarkerTypeHexagon  MarkerType = "hexagon"
+)
+
+func (t MarkerType) String() string { return string(t) }
 
 type ScalarDef struct {
 	Type          ScalarType `yaml:"type"`
@@ -154,6 +171,7 @@ type DataSet interface {
 	Next() bool
 	Err() error
 	Field(name string) any
+	ResetIterator()
 }
 
 // ColorDoc represents a document that defines a set of named colors
@@ -166,3 +184,24 @@ type NamedColor struct {
 	Name  string `yaml:"name"`
 	Color string `yaml:"color"`
 }
+
+// ComputedDef defines a computed dataset from a combination of others
+type ComputedDef struct {
+	Name     string              `yaml:"name"`
+	Function ComputeType         `yaml:"function"`
+	DataSets []ComputeDataSetDef `yaml:"datasets"`
+}
+
+type ComputeDataSetDef struct {
+	DataSet    string `yaml:"dataset"`    // the name of the dataset
+	JoinField  string `yaml:"joinField"`  // the field name that will be used to join the datasets
+	ValueField string `yaml:"valueField"` // the field containing the value that will be used in the computation
+}
+
+type ComputeType string
+
+const (
+	ComputeTypeDiff ComputeType = "diff" // compute the difference between the first series and the second (first-second)
+)
+
+func (t ComputeType) String() string { return string(t) }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"golang.org/x/exp/slog"
@@ -18,14 +20,43 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 	for _, ds := range pd.Datasets {
 		src, exists := cfg.Sources[ds.Source]
 		if !exists {
-			return nil, fmt.Errorf("unknown dataset source: %s", ds.Source)
+			return nil, fmt.Errorf("unknown dataset source: %q", ds.Source)
 		}
 		var err error
-		slog.Debug("getting dataset", "name", pd.Name, "dataset", ds.Name, "source", ds.Source, "query", ds.Query)
+		slog.Debug("getting dataset", "name", pd.Name, "dataset", ds.Name, "source", ds.Source, "query", stripNewlines(ds.Query))
 		dataSets[ds.Name], err = src.GetDataSet(ctx, ds.Query)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get dataset from source %q: %w", ds.Source, err)
 		}
+	}
+
+	for _, cds := range pd.Computed {
+		if _, exists := dataSets[cds.Name]; exists {
+			return nil, fmt.Errorf("computed dataset name conflicts with existing dataset: %q", cds.Name)
+		}
+
+		for _, ds := range cds.DataSets {
+			_, exists := dataSets[ds.DataSet]
+			if !exists {
+				return nil, fmt.Errorf("unknown dataset in computed dataset %q: %q", cds.Name, ds.DataSet)
+			}
+		}
+
+		switch cds.Function {
+		case ComputeTypeDiff:
+			slog.Debug("computing dataset", "name", pd.Name, "computed", cds.Name, "function", cds.Function, "dataset1", cds.DataSets[0].DataSet, "dataset2", cds.DataSets[1].DataSet)
+			if len(cds.DataSets) != 2 {
+				return nil, fmt.Errorf("unexpected number of datasets in computed dataset %q: %d", cds.Name, len(cds.DataSets))
+			}
+			var err error
+			dataSets[cds.Name], err = ComputeBinaryPredicate(ctx, diff2, ComputeInput{Def: cds.DataSets[0], DataSet: dataSets[cds.DataSets[0].DataSet]}, ComputeInput{Def: cds.DataSets[1], DataSet: dataSets[cds.DataSets[1].DataSet]})
+			if err != nil {
+				return nil, fmt.Errorf("failed to compute dataset %q: %w", cds.Name, err)
+			}
+		default:
+			return nil, fmt.Errorf("unknown function in computed dataset %q: %q", cds.Name, cds.Function)
+		}
+
 	}
 
 	fig.Data = grob.Traces{}
@@ -74,6 +105,7 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 		dataIndex := make(map[string]*LabeledSeries)
 
 		slog.Info("reading dataset", "name", dsname)
+		ds.ResetIterator()
 		for ds.Next() {
 			for _, s := range series {
 				s := s
@@ -101,9 +133,9 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 					dataIndex[ls.Name] = ls
 				}
 				if s.Labels != "" {
-					ls.Labels = append(ls.Labels, ds.Field(s.Labels))
+					ls.Labels = append(ls.Labels, normalizeValue(ds.Field(s.Labels)))
 				}
-				ls.Values = append(ls.Values, ds.Field(s.Values))
+				ls.Values = append(ls.Values, normalizeValue(ds.Field(s.Values)))
 			}
 		}
 		if ds.Err() != nil {
@@ -153,21 +185,25 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				traces = append(traces, trace)
 			case SeriesTypeLine:
 				trace := &grob.Scatter{
-					Type: grob.TraceTypeScatter,
-					Name: ls.Name,
-					X:    ls.Labels,
-					Y:    ls.Values,
-					Mode: "lines",
+					Type:   grob.TraceTypeScatter,
+					Name:   ls.Name,
+					X:      ls.Labels,
+					Y:      ls.Values,
+					Mode:   "lines",
+					Marker: &grob.ScatterMarker{},
 				}
 
 				if ls.SeriesDef.Fill == FillTypeToZero {
 					trace.Fill = "tozeroy"
 				}
 
+				if ls.SeriesDef.Marker != MarkerTypeNone {
+					trace.Mode = "lines+markers"
+					trace.Marker.Symbol = ls.SeriesDef.Marker
+				}
+
 				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
-					trace.Marker = &grob.ScatterMarker{
-						Color: c,
-					}
+					trace.Marker.Color = c
 				}
 				traces = append(traces, trace)
 			case SeriesTypeBox:
@@ -320,4 +356,18 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 		}
 	}
 	return traces, nil
+}
+
+func stripNewlines(s string) string {
+	return strings.ReplaceAll(s, "\n", " ")
+}
+
+func normalizeValue(v any) any {
+	switch tv := v.(type) {
+	case time.Time:
+		// ensure all times are using exact same format to help plotly
+		return tv.UTC().Format(time.RFC3339)
+	default:
+		return v
+	}
 }

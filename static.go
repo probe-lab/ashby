@@ -63,6 +63,9 @@ func (s *StaticDataSet) Next() bool {
 	if s.err != nil {
 		return false
 	}
+	if s.rowcount <= 0 {
+		return false
+	}
 	if s.nextrow == s.rowcount {
 		return false
 	}

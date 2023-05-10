@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +55,12 @@ var plotCommand = &cli.Command{
 			Usage:       "Name of file JSON output should be written to. Output will be emitted to stdout by default.",
 			Destination: &plotOpts.output,
 		},
+		&cli.StringFlag{
+			Name:        "conf",
+			Required:    false,
+			Usage:       "Path of directory containing configuration.",
+			Destination: &plotOpts.confDir,
+		},
 	}, loggingFlags...),
 }
 
@@ -62,6 +70,7 @@ var plotOpts struct {
 	sources  cli.StringSlice
 	output   string
 	validate bool
+	confDir  string
 }
 
 func Plot(cc *cli.Context) error {
@@ -92,6 +101,24 @@ func Plot(cc *cli.Context) error {
 			return fmt.Errorf("unsupported source url: %q", url)
 		}
 
+	}
+
+	if batchOpts.confDir != "" {
+		conffs := os.DirFS(plotOpts.confDir)
+		colorConfContent, err := fs.ReadFile(conffs, "colors.yaml")
+		if err == nil {
+			var cd ColorDoc
+			if err := yaml.Unmarshal(colorConfContent, &cd); err != nil {
+				return fmt.Errorf("failed to unmarshal colors.yaml: %w", err)
+			}
+			cfg.DefaultColor = cd.Default
+			cfg.Colors = make(map[string]string, len(cd.Colors))
+			for _, nc := range cd.Colors {
+				cfg.Colors[nc.Name] = nc.Color
+			}
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("failed to read colors: %w", err)
+		}
 	}
 
 	if cc.NArg() != 1 {
