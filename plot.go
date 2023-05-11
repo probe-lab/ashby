@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MetalBlueberry/go-plotly/offline"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/exp/slog"
 	"gopkg.in/yaml.v3"
@@ -208,7 +207,9 @@ func Plot(cc *cli.Context) error {
 	fmt.Fprintln(out, string(data))
 
 	if plotOpts.preview {
-		offline.Show(fig)
+		if err := preview(fig); err != nil {
+			return fmt.Errorf("preview plot: %w", err)
+		}
 	}
 	return nil
 }
