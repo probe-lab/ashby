@@ -63,6 +63,12 @@ func (f PlotFrequency) Truncate(t time.Time) time.Time {
 	}
 }
 
+type ProcessingProfile struct {
+	Dir      string           `yaml:"directory"`
+	OutTpl   string           `yaml:"output"`
+	Variants []map[string]any `yaml:"variants"`
+}
+
 type PlotDef struct {
 	Name      string        `yaml:"name"`
 	Frequency PlotFrequency `yaml:"frequency"`
