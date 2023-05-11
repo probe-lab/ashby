@@ -27,6 +27,9 @@ type PlotConfig struct {
 
 	// Colors is a mapping of friendly names to hex values of colors
 	Colors map[string]string
+
+	// Profiles contains information about different variants of plot defs
+	Profiles []*ProcessingProfile
 }
 
 func (c *PlotConfig) MaybeLookupColor(name string, seriesName string) string {
