@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,10 +24,31 @@ import (
 //	base/2023/05/08/demo.json
 //	latest/demo.json
 type Organizer struct {
-	Base string
+	Base     string
+	Template string
+	Params   map[string]any
 }
 
-func (o *Organizer) Filename(pd *PlotDef, basisTime time.Time) string {
+func (o *Organizer) Filename(name string) (string, error) {
+	t, err := template.New("").Parse(o.Template)
+	if err != nil {
+		return "", fmt.Errorf("parsing filename template: %w", err)
+	}
+
+	data := map[string]any{
+		"Params":          o.Params,
+		"PlotDefFilename": name,
+	}
+
+	buf := new(bytes.Buffer)
+	if err := t.Execute(buf, data); err != nil {
+		return "", fmt.Errorf("execute filename template: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+func (o *Organizer) Filepath(pd *PlotDef, basisTime time.Time) (string, error) {
 	var dated string
 	switch pd.Frequency {
 	case PlotFrequencyWeekly:
@@ -37,7 +60,13 @@ func (o *Organizer) Filename(pd *PlotDef, basisTime time.Time) string {
 	default:
 		slog.Warn(fmt.Sprintf("unsupported plot frequency: %q", pd.Frequency))
 	}
-	return filepath.Join(o.Base, dated, pd.Name+".json")
+
+	filename, err := o.Filename(pd.Name)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(o.Base, dated, filename), nil
 }
 
 func (o *Organizer) Glob(pd *PlotDef, basisTime time.Time) ([]string, error) {
@@ -57,12 +86,21 @@ func (o *Organizer) Glob(pd *PlotDef, basisTime time.Time) ([]string, error) {
 	return filepath.Glob(pattern)
 }
 
-func (o *Organizer) LatestFilename(pd *PlotDef) string {
-	return filepath.Join(o.Base, "latest", pd.Name+".json")
+func (o *Organizer) LatestFilepath(pd *PlotDef) (string, error) {
+	filename, err := o.Filename(pd.Name)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(o.Base, "latest", filename), nil
 }
 
 func (o *Organizer) IsStaleOrMissing(pd *PlotDef, basisTime time.Time, expectedTime time.Time) (bool, error) {
-	fname := o.Filename(pd, basisTime)
+	fname, err := o.Filepath(pd, basisTime)
+	if err != nil {
+		return false, fmt.Errorf("filepath: %w", err)
+	}
+
 	info, err := os.Lstat(fname)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -70,6 +108,7 @@ func (o *Organizer) IsStaleOrMissing(pd *PlotDef, basisTime time.Time, expectedT
 		}
 		return false, fmt.Errorf("stat file: %w", err)
 	}
+
 	return info.ModTime().Before(expectedTime), nil
 }
 
@@ -81,7 +120,7 @@ func (o *Organizer) IsLatest(pd *PlotDef, basisTime time.Time) (bool, error) {
 
 	// add the current filename to the existing ones, sort and see if current
 	// filename is the last entry
-	fname := o.Filename(pd, basisTime)
+	fname, _ := o.Filepath(pd, basisTime)
 	existing = append(existing, fname)
 	sort.Strings(existing)
 	if existing[len(existing)-1] == fname {
@@ -91,7 +130,12 @@ func (o *Organizer) IsLatest(pd *PlotDef, basisTime time.Time) (bool, error) {
 }
 
 func (o *Organizer) WritePlot(data []byte, pd *PlotDef, basisTime time.Time) error {
-	if err := writeOutput(o.Filename(pd, basisTime), data); err != nil {
+	path, err := o.Filepath(pd, basisTime)
+	if err != nil {
+		return err
+	}
+
+	if err := writeOutput(path, data); err != nil {
 		return fmt.Errorf("write plot: %w", err)
 	}
 
@@ -103,7 +147,12 @@ func (o *Organizer) WritePlot(data []byte, pd *PlotDef, basisTime time.Time) err
 		return nil
 	}
 
-	if err := writeOutput(o.LatestFilename(pd), data); err != nil {
+	path, err = o.LatestFilepath(pd)
+	if err != nil {
+		return err
+	}
+
+	if err := writeOutput(path, data); err != nil {
 		return fmt.Errorf("write latest: %w", err)
 	}
 	return nil

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,7 +45,7 @@ var batchCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:        "in",
 			Required:    true,
-			Usage:       "Path of directory containing plot definitions.",
+			Usage:       "Path of directory containing processing profile definitions.",
 			Destination: &batchOpts.inDir,
 		},
 		&cli.StringFlag{
@@ -181,133 +182,177 @@ func Batch(cc *cli.Context) error {
 		return fmt.Errorf("failed to read input directory: %w", err)
 	}
 
-	grp, ctx := errgroup.WithContext(ctx)
-	grp.SetLimit(batchOpts.concurrency)
-
-	org := new(Organizer)
-	absOutDir, err := filepath.Abs(batchOpts.outDir)
-	if err != nil {
-		return fmt.Errorf("failed to find output directory: %w", err)
-	}
-	org.Base = absOutDir
-
 	for _, fname := range fnames {
-		fname := fname
-		grp.Go(func() error {
-			fcontent, err := fs.ReadFile(infs, fname)
-			if err != nil {
-				return fmt.Errorf("failed to read plot definition %q: %w", fname, err)
-			}
+		fcontent, err := fs.ReadFile(infs, fname)
+		if err != nil {
+			return fmt.Errorf("failed to read processing profile %q: %w", fname, err)
+		}
 
-			templated, err := ExecuteTemplate(ctx, string(fcontent), cfg)
-			if err != nil {
-				return fmt.Errorf("failed to execute templates for plot definition: %w", err)
-			}
+		var profile ProcessingProfile
+		if err := yaml.Unmarshal(fcontent, &profile); err != nil {
+			return fmt.Errorf("failed to unmarshal processing profile: %w", err)
+		}
+		profile.Dir = filepath.Join(batchOpts.inDir, profile.Dir)
+		if len(profile.Variants) == 0 {
+			profile.Variants = []map[string]any{{}}
+		}
 
-			pd, err := parsePlotDef(fname, []byte(templated))
-			if err != nil {
-				return fmt.Errorf("failed to parse plot definition %q: %w", fname, err)
-			}
-
-			logger := slog.With("name", pd.Name)
-			plotFilename := org.Filename(pd, cfg.BasisTime)
-			logger.Debug("plot filename", "filename", plotFilename)
-
-			info, err := os.Lstat(filepath.Join(batchOpts.inDir, fname))
-			if err != nil {
-				return err
-			}
-
-			isMissingOrStale, err := org.IsStaleOrMissing(pd, cfg.BasisTime, info.ModTime())
-			if err != nil {
-				logger.Error("failed to determine if plot file needs writing", "error", err)
-			}
-
-			shouldWrite := batchOpts.force || isMissingOrStale
-			if shouldWrite {
-				logger.Debug("plot file should be written")
-			} else {
-				logger.Debug("plot file does not need to be written")
-			}
-
-			isLatest, err := org.IsLatest(pd, cfg.BasisTime)
-			if err != nil {
-				logger.Error("failed to determine if plot file is latest", "error", err)
-			}
-			if isLatest {
-				logger.Debug("plot is latest")
-			} else {
-				logger.Debug("plot is not latest")
-			}
-
-			if batchOpts.validate {
-				fmt.Println("Name: " + pd.Name)
-				fmt.Println("Frequency: " + pd.Frequency)
-				fmt.Println("Output: " + org.Filename(pd, cfg.BasisTime))
-				fmt.Printf("Is missing or stale: %v\n", isMissingOrStale)
-				fmt.Printf("Is latest version: %v\n", isLatest)
-
-				fmt.Println("Datasets:")
-				for _, ds := range pd.Datasets {
-					fmt.Println("  Name: " + ds.Name)
-					fmt.Println("  Source: " + ds.Source)
-					fmt.Println("  Query:")
-					fmt.Println(indent(ds.Query, "      "))
-
-				}
-
-				return nil
-			}
-
-			if !shouldWrite {
-				slog.Info("skipping plot, output already exists", "name", pd.Name)
-				return nil
-			}
-
-			slog.Info("generating plot", "name", pd.Name)
-			// set up a monitoring loop that reports progress for long running queries
-			done := make(chan struct{})
-			t := time.NewTicker(time.Minute)
-			go func() {
-				start := time.Now()
-				defer t.Stop()
-				for {
-					select {
-					case <-t.C:
-						slog.Info("still generating plot", "name", pd.Name, "elapsed", time.Since(start).Round(time.Second))
-					case <-done:
-						return
-					}
-				}
-			}()
-			fig, err := generateFig(ctx, pd, cfg)
-			close(done) // stop the monitoring loop
-
-			if err != nil {
-				return fmt.Errorf("failed to generate plot %q: %w", pd.Name, err)
-			}
-
-			var data []byte
-			if batchOpts.compact {
-				data, err = json.Marshal(fig)
-			} else {
-				data, err = json.MarshalIndent(fig, "", "  ")
-			}
-			if err != nil {
-				return fmt.Errorf("failed to marshal to json: %w", err)
-			}
-
-			slog.Info("writing plot output", "name", pd.Name, "filename", plotFilename)
-			if err := org.WritePlot(data, pd, cfg.BasisTime); err != nil {
-				return fmt.Errorf("failed to write plot: %w", err)
-			}
-
-			return nil
-		})
+		if err := profile.processPlotDefs(ctx, cfg); err != nil {
+			return fmt.Errorf("processing plot definitions: %w", err)
+		}
 	}
 
-	if err := grp.Wait(); err != nil {
-		return err
+	return nil
+}
+
+func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig) error {
+	infs := os.DirFS(p.Dir)
+	fnames, err := fs.Glob(infs, "*.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to read input directory: %w", err)
+	}
+
+	for _, variant := range p.Variants {
+
+		// TODO: merge with existing TemplateParams as soon as the CLI option
+		// was added.
+		cfg.TemplateParams = variant
+
+		grp, ctx := errgroup.WithContext(ctx)
+		grp.SetLimit(batchOpts.concurrency)
+
+		for _, fname := range fnames {
+			fname := fname
+			grp.Go(func() error {
+				absOutDir, err := filepath.Abs(batchOpts.outDir)
+				if err != nil {
+					return fmt.Errorf("failed to find output directory: %w", err)
+				}
+
+				org := Organizer{
+					Base:     absOutDir,
+					Template: p.OutTpl,
+					Params:   variant,
+				}
+
+				fcontent, err := fs.ReadFile(infs, fname)
+				if err != nil {
+					return fmt.Errorf("failed to read plot definition %q: %w", fname, err)
+				}
+
+				templated, err := ExecuteTemplate(ctx, string(fcontent), cfg)
+				if err != nil {
+					return fmt.Errorf("failed to execute templates for plot definition: %w", err)
+				}
+
+				pd, err := parsePlotDef(fname, []byte(templated))
+				if err != nil {
+					return fmt.Errorf("failed to parse plot definition %q: %w", fname, err)
+				}
+
+				logger := slog.With("name", pd.Name)
+				plotFilename, err := org.Filepath(pd, cfg.BasisTime)
+				if err != nil {
+					return fmt.Errorf("plot filepath: %w", err)
+				}
+				logger.Debug("plot filename", "filepath", plotFilename)
+
+				info, err := os.Lstat(filepath.Join(p.Dir, fname))
+				if err != nil {
+					return err
+				}
+
+				isMissingOrStale, err := org.IsStaleOrMissing(pd, cfg.BasisTime, info.ModTime())
+				if err != nil {
+					logger.Error("failed to determine if plot file needs writing", "error", err)
+				}
+
+				shouldWrite := batchOpts.force || isMissingOrStale
+				if shouldWrite {
+					logger.Debug("plot file should be written")
+				} else {
+					logger.Debug("plot file does not need to be written")
+				}
+
+				isLatest, err := org.IsLatest(pd, cfg.BasisTime)
+				if err != nil {
+					logger.Error("failed to determine if plot file is latest", "error", err)
+				}
+				if isLatest {
+					logger.Debug("plot is latest")
+				} else {
+					logger.Debug("plot is not latest")
+				}
+
+				if batchOpts.validate {
+					fmt.Println("Name: " + pd.Name)
+					fmt.Println("Frequency: " + pd.Frequency)
+					fmt.Println("Output: " + plotFilename)
+					fmt.Printf("Is missing or stale: %v\n", isMissingOrStale)
+					fmt.Printf("Is latest version: %v\n", isLatest)
+
+					fmt.Println("Datasets:")
+					for _, ds := range pd.Datasets {
+						fmt.Println("  Name: " + ds.Name)
+						fmt.Println("  Source: " + ds.Source)
+						fmt.Println("  Query:")
+						fmt.Println(indent(ds.Query, "      "))
+
+					}
+
+					return nil
+				}
+
+				if !shouldWrite {
+					slog.Info("skipping plot, output already exists", "name", pd.Name)
+					return nil
+				}
+
+				slog.Info("generating plot", "name", pd.Name)
+				// set up a monitoring loop that reports progress for long running queries
+				done := make(chan struct{})
+				t := time.NewTicker(time.Minute)
+				go func() {
+					start := time.Now()
+					defer t.Stop()
+					for {
+						select {
+						case <-t.C:
+							slog.Info("still generating plot", "name", pd.Name, "elapsed", time.Since(start).Round(time.Second))
+						case <-done:
+							return
+						}
+					}
+				}()
+				fig, err := generateFig(ctx, pd, cfg)
+				close(done) // stop the monitoring loop
+
+				if err != nil {
+					return fmt.Errorf("failed to generate plot %q: %w", pd.Name, err)
+				}
+
+				var data []byte
+				if batchOpts.compact {
+					data, err = json.Marshal(fig)
+				} else {
+					data, err = json.MarshalIndent(fig, "", "  ")
+				}
+				if err != nil {
+					return fmt.Errorf("failed to marshal to json: %w", err)
+				}
+
+				slog.Info("writing plot output", "name", pd.Name, "filename", plotFilename)
+				if err := org.WritePlot(data, pd, cfg.BasisTime); err != nil {
+					return fmt.Errorf("failed to write plot: %w", err)
+				}
+
+				return nil
+			})
+		}
+
+		if err := grp.Wait(); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -124,10 +125,11 @@ func Plot(cc *cli.Context) error {
 		cfg.TemplateParams[key] = value
 	}
 
-	if batchOpts.confDir != "" {
+	if plotOpts.confDir != "" {
 		conffs := os.DirFS(plotOpts.confDir)
 		colorConfContent, err := fs.ReadFile(conffs, "colors.yaml")
 		if err == nil {
+			slog.Info("Parsing colors.yaml", "filename", path.Join(plotOpts.confDir, "colors.yaml"))
 			var cd ColorDoc
 			if err := yaml.Unmarshal(colorConfContent, &cd); err != nil {
 				return fmt.Errorf("failed to unmarshal colors.yaml: %w", err)
