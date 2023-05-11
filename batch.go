@@ -43,12 +43,6 @@ var batchCommand = &cli.Command{
 			Destination: &batchOpts.sources,
 		},
 		&cli.StringFlag{
-			Name:        "in",
-			Required:    true,
-			Usage:       "Path of directory containing processing profile definitions.",
-			Destination: &batchOpts.inDir,
-		},
-		&cli.StringFlag{
 			Name:        "out",
 			Required:    true,
 			Usage:       "Path of directory where plots should be written.",
@@ -93,7 +87,6 @@ var batchOpts struct {
 	preview     bool
 	compact     bool
 	sources     cli.StringSlice
-	inDir       string
 	outDir      string
 	confDir     string
 	validate    bool
@@ -161,42 +154,42 @@ func Batch(cc *cli.Context) error {
 	if batchOpts.confDir != "" {
 		conffs := os.DirFS(batchOpts.confDir)
 		colorConfContent, err := fs.ReadFile(conffs, "colors.yaml")
-		if err == nil {
-			var cd ColorDoc
-			if err := yaml.Unmarshal(colorConfContent, &cd); err != nil {
-				return fmt.Errorf("failed to unmarshal colors.yaml: %w", err)
-			}
-			cfg.DefaultColor = cd.Default
-			cfg.Colors = make(map[string]string, len(cd.Colors))
-			for _, nc := range cd.Colors {
-				cfg.Colors[nc.Name] = nc.Color
-			}
-		} else if !errors.Is(err, fs.ErrNotExist) {
+		if err != nil {
 			return fmt.Errorf("failed to read colors: %w", err)
 		}
-	}
 
-	infs := os.DirFS(batchOpts.inDir)
-	fnames, err := fs.Glob(infs, "*.yaml")
-	if err != nil {
-		return fmt.Errorf("failed to read input directory: %w", err)
-	}
+		var cd ColorDoc
+		if err := yaml.Unmarshal(colorConfContent, &cd); err != nil {
+			return fmt.Errorf("failed to unmarshal colors.yaml: %w", err)
+		}
 
-	for _, fname := range fnames {
-		fcontent, err := fs.ReadFile(infs, fname)
+		cfg.DefaultColor = cd.Default
+		cfg.Colors = make(map[string]string, len(cd.Colors))
+		for _, nc := range cd.Colors {
+			cfg.Colors[nc.Name] = nc.Color
+		}
+
+		profilesConfContent, err := fs.ReadFile(conffs, "profiles.yaml")
 		if err != nil {
-			return fmt.Errorf("failed to read processing profile %q: %w", fname, err)
+			return fmt.Errorf("failed to read profiles: %w", err)
 		}
 
-		var profile ProcessingProfile
-		if err := yaml.Unmarshal(fcontent, &profile); err != nil {
-			return fmt.Errorf("failed to unmarshal processing profile: %w", err)
-		}
-		profile.Dir = filepath.Join(batchOpts.inDir, profile.Dir)
-		if len(profile.Variants) == 0 {
-			profile.Variants = []map[string]any{{}}
+		var profiles []*ProcessingProfile
+		if err := yaml.Unmarshal(profilesConfContent, &profiles); err != nil {
+			return fmt.Errorf("failed to unmarshal processing profiles: %w", err)
 		}
 
+		for _, profile := range profiles {
+			profile.Dir = filepath.Join(batchOpts.confDir, profile.Dir)
+
+			if len(profile.Variants) == 0 {
+				profile.Variants = []map[string]any{{}}
+			}
+		}
+		cfg.Profiles = profiles
+	}
+
+	for _, profile := range cfg.Profiles {
 		if err := profile.processPlotDefs(ctx, cfg); err != nil {
 			return fmt.Errorf("processing plot definitions: %w", err)
 		}
