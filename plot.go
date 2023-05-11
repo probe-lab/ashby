@@ -48,6 +48,13 @@ var plotCommand = &cli.Command{
 			Usage:       "Specify the url of a data source, in the format name=url. May be repeated to specify multiple sources. Postgres urls take the form 'postgres://username:password@hostname:5432/database_name'",
 			Destination: &plotOpts.sources,
 		},
+		&cli.StringSliceFlag{
+			Name:        "template-params",
+			Aliases:     []string{"t"},
+			Required:    false,
+			Usage:       "Specify templating parameters, in the format key=value. May be repeated to specify multiple parameters.",
+			Destination: &plotOpts.params,
+		},
 		&cli.StringFlag{
 			Name:        "output",
 			Aliases:     []string{"o"},
@@ -68,6 +75,7 @@ var plotOpts struct {
 	preview  bool
 	compact  bool
 	sources  cli.StringSlice
+	params   cli.StringSlice
 	output   string
 	validate bool
 	confDir  string
@@ -83,6 +91,7 @@ func Plot(cc *cli.Context) error {
 			"static": &StaticDataSource{},
 			"demo":   &DemoDataSource{},
 		},
+		TemplateParams: map[string]any{},
 	}
 
 	for _, sopt := range plotOpts.sources.Value() {
@@ -101,6 +110,19 @@ func Plot(cc *cli.Context) error {
 			return fmt.Errorf("unsupported source url: %q", url)
 		}
 
+	}
+
+	for _, param := range plotOpts.params.Value() {
+		key, value, ok := strings.Cut(param, "=")
+		if !ok {
+			return fmt.Errorf("params option not valid, use format 'key=value'")
+		}
+
+		if _, exists := cfg.TemplateParams[key]; exists {
+			return fmt.Errorf("duplicate template parameter %q specified", key)
+		}
+
+		cfg.TemplateParams[key] = value
 	}
 
 	if batchOpts.confDir != "" {
