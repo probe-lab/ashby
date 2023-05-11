@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+	"text/template"
 	"time"
 
 	"golang.org/x/exp/slog"
