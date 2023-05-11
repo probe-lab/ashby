@@ -19,6 +19,10 @@ type PlotConfig struct {
 	// referenced in a dataset definition
 	Sources map[string]DataSource
 
+	// Template parameters can be provided on the command line. They
+	// are passed directly to the templating engine.
+	TemplateParams map[string]any
+
 	DefaultColor string
 
 	// Colors is a mapping of friendly names to hex values of colors

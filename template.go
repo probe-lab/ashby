@@ -44,6 +44,7 @@ func ExecuteTemplate(ctx context.Context, source string, cfg *PlotConfig) (strin
 		"EndOfPreviousHour": cfg.BasisTime.Truncate(time.Hour).Add(-time.Nanosecond),
 		"EndOfPreviousDay":  cfg.BasisTime.Truncate(24 * time.Hour).Add(-time.Nanosecond),
 		"EndOfPreviousWeek": cfg.BasisTime.Truncate(7 * 24 * time.Hour).Add(-time.Nanosecond),
+		"Params":            cfg.TemplateParams,
 	}
 
 	buf := new(bytes.Buffer)
