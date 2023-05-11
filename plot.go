@@ -49,8 +49,8 @@ var plotCommand = &cli.Command{
 			Destination: &plotOpts.sources,
 		},
 		&cli.StringSliceFlag{
-			Name:        "template-params",
-			Aliases:     []string{"t"},
+			Name:        "params",
+			Aliases:     []string{"p"},
 			Required:    false,
 			Usage:       "Specify templating parameters, in the format key=value. May be repeated to specify multiple parameters.",
 			Destination: &plotOpts.params,
