@@ -16,14 +16,21 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 		Layout: &pd.Layout,
 	}
 
+	logger := slog.With("name", pd.Name)
+
 	dataSets := make(map[string]DataSet)
 	for _, ds := range pd.Datasets {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		src, exists := cfg.Sources[ds.Source]
 		if !exists {
 			return nil, fmt.Errorf("unknown dataset source: %q", ds.Source)
 		}
 		var err error
-		slog.Debug("getting dataset", "name", pd.Name, "dataset", ds.Name, "source", ds.Source, "query", stripNewlines(ds.Query))
+		logger.Debug("getting dataset", "dataset", ds.Name, "source", ds.Source, "query", stripNewlines(ds.Query))
 		dataSets[ds.Name], err = src.GetDataSet(ctx, ds.Query)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get dataset from source %q: %w", ds.Source, err)
@@ -31,6 +38,11 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 	}
 
 	for _, cds := range pd.Computed {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		if _, exists := dataSets[cds.Name]; exists {
 			return nil, fmt.Errorf("computed dataset name conflicts with existing dataset: %q", cds.Name)
 		}
@@ -44,7 +56,7 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 
 		switch cds.Function {
 		case ComputeTypeDiff:
-			slog.Debug("computing dataset", "name", pd.Name, "computed", cds.Name, "function", cds.Function, "dataset1", cds.DataSets[0].DataSet, "dataset2", cds.DataSets[1].DataSet)
+			logger.Debug("computing dataset", "computed", cds.Name, "function", cds.Function, "dataset1", cds.DataSets[0].DataSet, "dataset2", cds.DataSets[1].DataSet)
 			if len(cds.DataSets) != 2 {
 				return nil, fmt.Errorf("unexpected number of datasets in computed dataset %q: %d", cds.Name, len(cds.DataSets))
 			}
@@ -61,13 +73,13 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 
 	fig.Data = grob.Traces{}
 
-	traces, err := seriesTraces(dataSets, pd.Series, cfg)
+	traces, err := seriesTraces(dataSets, pd.Series, cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("series traces: %w", err)
 	}
 	fig.Data = append(fig.Data, traces...)
 
-	traces, err = scalarTraces(dataSets, pd.Scalars, cfg)
+	traces, err = scalarTraces(dataSets, pd.Scalars, cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("scalar tracess: %w", err)
 	}
@@ -83,13 +95,13 @@ type LabeledSeries struct {
 	Values    []any
 }
 
-func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *PlotConfig) ([]grob.Trace, error) {
+func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *PlotConfig, logger *slog.Logger) ([]grob.Trace, error) {
 	var traces []grob.Trace
 
 	seriesByDataSet := make(map[string][]SeriesDef)
 	for i, s := range seriesDefs {
 		if _, ok := dataSets[s.DataSet]; !ok {
-			slog.Error(fmt.Sprintf("unknown dataset name %q in series %d", s.DataSet, i))
+			logger.Error(fmt.Sprintf("unknown dataset name %q in series %d", s.DataSet, i))
 			continue
 		}
 		seriesByDataSet[s.DataSet] = append(seriesByDataSet[s.DataSet], s)
@@ -104,9 +116,11 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 		data := make([]*LabeledSeries, 0)
 		dataIndex := make(map[string]*LabeledSeries)
 
-		slog.Info("reading dataset", "name", dsname)
+		logger.Info("reading dataset", "dataset", dsname)
 		ds.ResetIterator()
+		rowcount := 0
 		for ds.Next() {
+			rowcount++
 			for _, s := range series {
 				s := s
 				name := s.Name
@@ -124,7 +138,7 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 
 				ls, ok := dataIndex[name]
 				if !ok {
-					slog.Debug("creating series", "series", name)
+					logger.Debug("creating series", "dataset", dsname, "series", name)
 					ls = &LabeledSeries{
 						Name:      name,
 						SeriesDef: &s,
@@ -141,6 +155,7 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 		if ds.Err() != nil {
 			return nil, fmt.Errorf("dataset iteration ended with an error: %w", ds.Err())
 		}
+		logger.Info("finished reading dataset", "dataset", dsname, "rowcount", rowcount)
 
 		sort.Slice(data, func(i, j int) bool {
 			if data[i].SeriesDef.order != data[j].SeriesDef.order {
@@ -242,19 +257,19 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 	return traces, nil
 }
 
-func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *PlotConfig) ([]grob.Trace, error) {
+func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *PlotConfig, logger *slog.Logger) ([]grob.Trace, error) {
 	// work out which dataset fields need to be read
 	datasetFieldsUsed := make(map[string][]string)
 	for _, s := range scalarDefs {
 		if _, ok := dataSets[s.DataSet]; !ok {
-			slog.Error(fmt.Sprintf("unknown dataset name %q for scalar %s", s.DataSet, s.Name))
+			logger.Error(fmt.Sprintf("unknown dataset name %q for scalar %s", s.DataSet, s.Name))
 			continue
 		}
 		datasetFieldsUsed[s.DataSet] = append(datasetFieldsUsed[s.DataSet], s.Value)
 
 		if s.DeltaDataSet != "" {
 			if _, ok := dataSets[s.DeltaDataSet]; !ok {
-				slog.Error(fmt.Sprintf("unknown delta dataset name %q for scalar %s", s.DeltaDataSet, s.Name))
+				logger.Error(fmt.Sprintf("unknown delta dataset name %q for scalar %s", s.DeltaDataSet, s.Name))
 				continue
 			}
 			datasetFieldsUsed[s.DeltaDataSet] = append(datasetFieldsUsed[s.DeltaDataSet], s.DeltaValue)
@@ -266,12 +281,13 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 	for dsname, fields := range datasetFieldsUsed {
 		ds := dataSets[dsname]
 
+		logger.Info("reading first row of dataset", "dataset", dsname)
 		if !ds.Next() {
 			if ds.Err() != nil {
-				slog.Error(fmt.Sprintf("error reading dataset %q: %v", dsname, ds.Err()))
+				logger.Error(fmt.Sprintf("error reading dataset %q: %v", dsname, ds.Err()))
 				continue
 			}
-			slog.Error(fmt.Sprintf("no rows found for dataset %q", dsname))
+			logger.Error(fmt.Sprintf("no rows found for dataset %q", dsname))
 			continue
 		}
 
@@ -285,7 +301,7 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 			case int64:
 				dsValues[dsname][f] = float64(tv)
 			default:
-				slog.Error(fmt.Sprintf("field %q not read from dataset %q: (type %T)", f, dsname, v))
+				logger.Error(fmt.Sprintf("field %q not read from dataset %q: (type %T)", f, dsname, v))
 				dsValues[dsname][f] = 0
 			}
 		}
@@ -315,7 +331,7 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 
 			v, ok := dsValues[s.DataSet][s.Value]
 			if !ok {
-				slog.Error(fmt.Sprintf("missing value field for scalar %s", s.Name))
+				logger.Error(fmt.Sprintf("missing value field for scalar %s", s.Name))
 				continue
 			}
 			trace.Value = v
@@ -323,7 +339,7 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 			if s.DeltaDataSet != "" {
 				dv, ok := dsValues[s.DeltaDataSet][s.DeltaValue]
 				if !ok {
-					slog.Error(fmt.Sprintf("missing delta value field for scalar %s", s.Name))
+					logger.Error(fmt.Sprintf("missing delta value field for scalar %s", s.Name))
 					continue
 				}
 				switch s.DeltaType {

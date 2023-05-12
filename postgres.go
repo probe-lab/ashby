@@ -54,6 +54,7 @@ func (p *PgDataSource) GetDataSet(ctx context.Context, query string, params ...a
 	}
 
 	return &PgDataSet{
+		conn: conn,
 		rows: rows,
 	}, nil
 }
@@ -61,6 +62,7 @@ func (p *PgDataSource) GetDataSet(ctx context.Context, query string, params ...a
 var _ DataSet = (*PgDataSet)(nil)
 
 type PgDataSet struct {
+	conn       *pgxpool.Conn
 	rows       pgx.Rows
 	rowdata    []any
 	fields     map[string]int
@@ -76,7 +78,13 @@ func (s *PgDataSet) Next() bool {
 	}
 	s.rowdata = nil
 	if !s.usecache {
-		return s.rows.Next()
+		more := s.rows.Next()
+		if more {
+			return true
+		}
+		s.conn.Release()
+
+		return false
 	}
 	s.cacheindex++
 	if s.cacheindex >= len(s.cache) {
