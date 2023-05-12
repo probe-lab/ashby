@@ -324,11 +324,16 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 					return fmt.Errorf("failed to generate plot %q: %w", pd.Name, err)
 				}
 
+				figDat := FigureData{
+					Fig:    fig,
+					Params: pd.Parameters,
+				}
+
 				var data []byte
 				if batchOpts.compact {
-					data, err = json.Marshal(fig)
+					data, err = json.Marshal(figDat)
 				} else {
-					data, err = json.MarshalIndent(fig, "", "  ")
+					data, err = json.MarshalIndent(figDat, "", "  ")
 				}
 				if err != nil {
 					return fmt.Errorf("failed to marshal to json: %w", err)

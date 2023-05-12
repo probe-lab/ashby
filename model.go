@@ -73,13 +73,15 @@ type ProcessingProfile struct {
 }
 
 type PlotDef struct {
-	Name      string        `yaml:"name"`
-	Frequency PlotFrequency `yaml:"frequency"`
-	Datasets  []DataSetDef  `yaml:"datasets"`
-	Computed  []ComputedDef `yaml:"computed"`
-	Series    []SeriesDef   `yaml:"series"`
-	Scalars   []ScalarDef   `yaml:"scalars"`
-	Layout    grob.Layout   `yaml:"layout"`
+	Name       string         `yaml:"name"`
+	Frequency  PlotFrequency  `yaml:"frequency"`
+	Datasets   []DataSetDef   `yaml:"datasets"`
+	Computed   []ComputedDef  `yaml:"computed"`
+	Series     []SeriesDef    `yaml:"series"`
+	Scalars    []ScalarDef    `yaml:"scalars"`
+	Layout     grob.Layout    `yaml:"layout"`
+	Config     grob.Config    `yaml:"config"`
+	Parameters map[string]any `yaml:"params"`
 }
 
 type DataSetDef struct {
@@ -89,18 +91,19 @@ type DataSetDef struct {
 }
 
 type SeriesDef struct {
-	Type       SeriesType `yaml:"type"`
-	Name       string     `yaml:"name"` // name of the series
-	Color      string     `yaml:"color"`
-	Marker     MarkerType `yaml:"marker"`
-	Fill       FillType   `yaml:"fill"`
-	DataSet    string     `yaml:"dataset"`
-	Labels     string     `yaml:"labels"`     // the name of the field the series should use for labels
-	Values     string     `yaml:"values"`     // the name of the field the series should use for values
-	GroupField string     `yaml:"groupfield"` // optional name of a field the series should use for grouping into related series
-	GroupValue string     `yaml:"groupvalue"` // optional value of a field the series should use for grouping into related series
-	Percent    bool       `yaml:"percent"`
-	order      int        // used for retaining ordering of series
+	Type          SeriesType `yaml:"type"`
+	Name          string     `yaml:"name"` // name of the series
+	Color         string     `yaml:"color"`
+	Marker        MarkerType `yaml:"marker"`
+	Fill          FillType   `yaml:"fill"`
+	DataSet       string     `yaml:"dataset"`
+	Labels        string     `yaml:"labels"`     // the name of the field the series should use for labels
+	Values        string     `yaml:"values"`     // the name of the field the series should use for values
+	GroupField    string     `yaml:"groupfield"` // optional name of a field the series should use for grouping into related series
+	GroupValue    string     `yaml:"groupvalue"` // optional value of a field the series should use for grouping into related series
+	Percent       bool       `yaml:"percent"`
+	order         int        // used for retaining ordering of series
+	HoverTemplate string     `json:"hovertemplate,omitempty"`
 }
 
 type SeriesType string
@@ -218,3 +221,8 @@ const (
 )
 
 func (t ComputeType) String() string { return string(t) }
+
+type FigureData struct {
+	*grob.Fig
+	Params map[string]any `json:"params"`
+}
