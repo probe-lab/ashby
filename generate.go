@@ -14,6 +14,7 @@ import (
 func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, error) {
 	fig := &grob.Fig{
 		Layout: &pd.Layout,
+		Config: &pd.Config,
 	}
 
 	logger := slog.With("name", pd.Name)
@@ -169,11 +170,12 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 			switch ls.SeriesDef.Type {
 			case SeriesTypeBar:
 				trace := &grob.Bar{
-					Type:        grob.TraceTypeBar,
-					Name:        ls.Name,
-					Orientation: grob.BarOrientationV,
-					X:           ls.Labels,
-					Y:           ls.Values,
+					Type:          grob.TraceTypeBar,
+					Name:          ls.Name,
+					Orientation:   grob.BarOrientationV,
+					X:             ls.Labels,
+					Y:             ls.Values,
+					Hovertemplate: ls.SeriesDef.HoverTemplate,
 				}
 
 				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {

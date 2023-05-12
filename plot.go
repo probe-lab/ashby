@@ -186,11 +186,16 @@ func Plot(cc *cli.Context) error {
 		return fmt.Errorf("failed to generate plot: %w", err)
 	}
 
+	figDat := FigureData{
+		Fig:    fig,
+		Params: pd.Parameters,
+	}
+
 	var data []byte
 	if plotOpts.compact {
-		data, err = json.Marshal(fig)
+		data, err = json.Marshal(figDat)
 	} else {
-		data, err = json.MarshalIndent(fig, "", "  ")
+		data, err = json.MarshalIndent(figDat, "", "  ")
 	}
 	if err != nil {
 		return fmt.Errorf("failed to marshal to json: %w", err)
