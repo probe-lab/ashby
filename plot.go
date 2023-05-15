@@ -290,5 +290,18 @@ func parsePlotDef(fname string, content []byte) (*PlotDef, error) {
 		pd.Series[i].order = i
 	}
 
+	for _, t := range pd.Tables {
+		switch t.Type {
+		case TableTypeHeatmap:
+		default:
+			return nil, fmt.Errorf("unknown table type: %q", t.Type)
+		}
+	}
+
+	// annotate series with order in definition
+	for i := range pd.Tables {
+		pd.Tables[i].order = i
+	}
+
 	return &pd, nil
 }
