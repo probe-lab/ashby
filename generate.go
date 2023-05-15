@@ -8,6 +8,7 @@ import (
 	"time"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/exp/slog"
 )
 
@@ -82,11 +83,28 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 
 	traces, err = scalarTraces(dataSets, pd.Scalars, cfg, logger)
 	if err != nil {
-		return nil, fmt.Errorf("scalar tracess: %w", err)
+		return nil, fmt.Errorf("scalar traces: %w", err)
 	}
 	fig.Data = append(fig.Data, traces...)
 
+	traces, annotations, err := tableTraces(dataSets, pd.Tables, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("table traces: %w", err)
+	}
+	fig.Data = append(fig.Data, traces...)
+	fig.Layout.Annotations = annotations
+
 	return fig, nil
+}
+
+type Annotation struct {
+	RefX      string                        `json:"xref"`
+	RefY      string                        `json:"yref"`
+	X         any                           `json:"x"`
+	Y         any                           `json:"y"`
+	Text      string                        `json:"text"`
+	Font      *grob.HeatmapglHoverlabelFont `json:"font"`
+	ShowArrow bool                          `json:"showarrow"`
 }
 
 type LabeledSeries struct {
@@ -376,12 +394,150 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 	return traces, nil
 }
 
+type LabeledTable struct {
+	Name         string
+	TableDef     *TableDef
+	LabelsX      []any
+	LabelsY      []any
+	LabelsYIndex map[any]struct{}
+	Values       map[any]map[any]any
+}
+
+func (lt LabeledTable) ValueZ() [][]any {
+	result := make([][]any, len(lt.LabelsY))
+	for y, yLabel := range lt.LabelsY {
+		result[y] = make([]any, len(lt.LabelsX))
+		for x, xLabel := range lt.LabelsX {
+			result[y][x] = lt.Values[xLabel][yLabel]
+		}
+	}
+	return result
+}
+
+func (lt LabeledTable) Annotations() []Annotation {
+	var annotations []Annotation
+	for _, yLabel := range lt.LabelsY {
+		for _, xLabel := range lt.LabelsX {
+			annotations = append(annotations, Annotation{
+				RefX:      "x1",
+				RefY:      "y1",
+				X:         xLabel,
+				Y:         yLabel,
+				Text:      fmt.Sprintf("%.3f", lt.Values[xLabel][yLabel]),
+				ShowArrow: false,
+			})
+		}
+	}
+	return annotations
+}
+
+func tableTraces(dataSets map[string]DataSet, tablesDefs []TableDef, cfg *PlotConfig) ([]grob.Trace, []Annotation, error) {
+	var traces []grob.Trace
+	var annotations []Annotation
+
+	tablesByDataSet := make(map[string][]TableDef)
+	for i, t := range tablesDefs {
+		if _, ok := dataSets[t.DataSet]; !ok {
+			slog.Error(fmt.Sprintf("unknown dataset name %q in table %d", t.DataSet, i))
+			continue
+		}
+		tablesByDataSet[t.DataSet] = append(tablesByDataSet[t.DataSet], t)
+	}
+
+	for dsname, tables := range tablesByDataSet {
+		ds := dataSets[dsname]
+
+		data := make([]*LabeledTable, 0)
+		dataIndex := make(map[string]*LabeledTable)
+
+		slog.Info("reading dataset", "name", dsname)
+		ds.ResetIterator()
+		for ds.Next() {
+			for _, table := range tables {
+				table := table
+				name := table.Name
+
+				lt, ok := dataIndex[name]
+				if !ok {
+					slog.Debug("creating table", "table", name)
+					lt = &LabeledTable{
+						Name:         name,
+						TableDef:     &table,
+						LabelsX:      []any{},
+						LabelsY:      []any{},
+						LabelsYIndex: map[any]struct{}{},
+						Values:       map[any]map[any]any{},
+					}
+					data = append(data, lt)
+					dataIndex[lt.Name] = lt
+				}
+
+				labelX := normalizeValue(ds.Field(table.LabelsX))
+				labelY := normalizeValue(ds.Field(table.LabelsY))
+				valueZ := normalizeValue(ds.Field(table.Values))
+
+				if _, found := lt.Values[labelX]; !found {
+					lt.Values[labelX] = map[any]any{}
+					lt.LabelsX = append(lt.LabelsX, labelX)
+				}
+
+				if _, found := lt.LabelsYIndex[labelY]; !found {
+					lt.LabelsYIndex[labelY] = struct{}{}
+					lt.LabelsY = append(lt.LabelsY, labelY)
+				}
+
+				if _, found := lt.Values[labelX][labelY]; found {
+					return nil, nil, fmt.Errorf("found two values for %s/%s", labelX, labelY)
+				}
+
+				lt.Values[labelX][labelY] = valueZ
+			}
+		}
+		if ds.Err() != nil {
+			return nil, nil, fmt.Errorf("dataset iteration ended with an error: %w", ds.Err())
+		}
+
+		sort.Slice(data, func(i, j int) bool {
+			if data[i].TableDef.order != data[j].TableDef.order {
+				return data[i].TableDef.order < data[j].TableDef.order
+			}
+			return data[i].Name < data[j].Name
+		})
+
+		for _, lt := range data {
+			lt := lt
+
+			reverseScale := true
+			switch lt.TableDef.Type {
+			case TableTypeHeatmap:
+				trace := &grob.Heatmap{
+					Type:         grob.TraceTypeHeatmap,
+					Name:         lt.Name,
+					X:            lt.LabelsX,
+					Y:            lt.LabelsY,
+					Z:            lt.ValueZ(),
+					Colorscale:   "Viridis",
+					Reversescale: grob.Bool(&reverseScale),
+				}
+				traces = append(traces, trace)
+				annotations = append(annotations, lt.Annotations()...)
+			default:
+				return nil, nil, fmt.Errorf("unsupported table type: %s", lt.TableDef.Type)
+			}
+		}
+	}
+
+	return traces, annotations, nil
+}
+
 func stripNewlines(s string) string {
 	return strings.ReplaceAll(s, "\n", " ")
 }
 
 func normalizeValue(v any) any {
 	switch tv := v.(type) {
+	case pgtype.Interval:
+		return (time.Duration(tv.Microseconds) * time.Microsecond / time.Nanosecond).Seconds()
 	case time.Time:
 		// ensure all times are using exact same format to help plotly
 		return tv.UTC().Format(time.RFC3339)

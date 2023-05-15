@@ -79,6 +79,7 @@ type PlotDef struct {
 	Computed   []ComputedDef  `yaml:"computed"`
 	Series     []SeriesDef    `yaml:"series"`
 	Scalars    []ScalarDef    `yaml:"scalars"`
+	Tables     []TableDef     `yaml:"tables"`
 	Layout     grob.Layout    `yaml:"layout"`
 	Config     grob.Config    `yaml:"config"`
 	Parameters map[string]any `yaml:"params"`
@@ -226,3 +227,21 @@ type FigureData struct {
 	*grob.Fig
 	Params map[string]any `json:"params"`
 }
+
+type TableDef struct {
+	Type    TableType `yaml:"type"`
+	Name    string    `yaml:"name"`
+	DataSet string    `yaml:"dataset"`
+	LabelsX string    `yaml:"xLabels"`
+	LabelsY string    `yaml:"yLabels"`
+	Values  string    `yaml:"values"`
+	order   int       // used for retaining ordering of series
+}
+
+type TableType string
+
+const (
+	TableTypeHeatmap TableType = "heatmap"
+)
+
+func (t TableType) String() string { return string(t) }
