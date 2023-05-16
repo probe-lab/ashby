@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -27,6 +28,8 @@ func ExecuteTemplate(ctx context.Context, source string, cfg *PlotConfig) (strin
 	fm["dayModify"] = dayModify     // a version of sprig's dateModify that accepts a number of days
 	fm["weekModify"] = weekModify   // a version of sprig's dateModify that accepts a number of weeks
 	fm["monthModify"] = monthModify // a version of sprig's dateModify that accepts a number of months
+	fm["toUpper"] = strings.ToUpper
+	fm["toTitle"] = strings.ToTitle
 
 	t, err := template.New("").Funcs(fm).Parse(source)
 	if err != nil {
