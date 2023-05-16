@@ -229,13 +229,14 @@ type FigureData struct {
 }
 
 type TableDef struct {
-	Type    TableType `yaml:"type"`
-	Name    string    `yaml:"name"`
-	DataSet string    `yaml:"dataset"`
-	LabelsX string    `yaml:"xLabels"`
-	LabelsY string    `yaml:"yLabels"`
-	Values  string    `yaml:"values"`
-	order   int       // used for retaining ordering of series
+	Type     TableType             `yaml:"type"`
+	Name     string                `yaml:"name"`
+	DataSet  string                `yaml:"dataset"`
+	LabelsX  string                `yaml:"xLabels"`
+	LabelsY  string                `yaml:"yLabels"`
+	Values   string                `yaml:"values"`
+	Colorbar *grob.HeatmapColorbar `yaml:"colorbar"`
+	order    int                   // used for retaining ordering of series
 }
 
 type TableType string

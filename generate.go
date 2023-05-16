@@ -517,6 +517,7 @@ func tableTraces(dataSets map[string]DataSet, tablesDefs []TableDef, cfg *PlotCo
 					Y:            lt.LabelsY,
 					Z:            lt.ValueZ(),
 					Colorscale:   "Viridis",
+					Colorbar:     lt.TableDef.Colorbar,
 					Reversescale: grob.Bool(&reverseScale),
 				}
 				traces = append(traces, trace)
