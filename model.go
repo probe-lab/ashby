@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
@@ -67,9 +68,14 @@ func (f PlotFrequency) Truncate(t time.Time) time.Time {
 }
 
 type ProcessingProfile struct {
-	Dir      string           `yaml:"directory"`
+	Source   string           `yaml:"source"`
 	OutTpl   string           `yaml:"output"`
 	Variants []map[string]any `yaml:"variants"`
+}
+
+func (p *ProcessingProfile) SourceIsDir() bool {
+	info, err := os.Stat(p.Source)
+	return err == nil && info.IsDir()
 }
 
 type PlotDef struct {

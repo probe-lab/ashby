@@ -204,7 +204,7 @@ func Batch(cc *cli.Context) error {
 		}
 
 		for _, profile := range profiles {
-			profile.Dir = filepath.Join(batchOpts.confDir, profile.Dir)
+			profile.Source = filepath.Join(batchOpts.confDir, profile.Source)
 
 			if len(profile.Variants) == 0 {
 				profile.Variants = []map[string]any{{}}
@@ -223,10 +223,20 @@ func Batch(cc *cli.Context) error {
 }
 
 func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig) error {
-	infs := os.DirFS(p.Dir)
-	fnames, err := fs.Glob(infs, "*.yaml")
-	if err != nil {
-		return fmt.Errorf("failed to read input directory: %w", err)
+	var (
+		infs   fs.FS
+		fnames []string
+		err    error
+	)
+	if p.SourceIsDir() {
+		infs = os.DirFS(p.Source)
+		fnames, err = fs.Glob(infs, "*.yaml")
+		if err != nil {
+			return fmt.Errorf("failed to read input directory: %w", err)
+		}
+	} else {
+		infs = os.DirFS(filepath.Dir(p.Source))
+		fnames = []string{filepath.Base(p.Source)}
 	}
 
 	for _, variant := range p.Variants {
@@ -274,7 +284,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 				}
 				logger.Debug("plot filename", "filepath", plotFilename)
 
-				info, err := os.Lstat(filepath.Join(p.Dir, fname))
+				info, err := os.Lstat(filepath.Join(filepath.Dir(p.Source), fname))
 				if err != nil {
 					return err
 				}
