@@ -335,8 +335,9 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 				}
 
 				figDat := FigureData{
-					Fig:    fig,
-					Params: pd.Parameters,
+					Fig:       fig,
+					Params:    pd.Parameters,
+					DynLayout: pd.DynLayout,
 				}
 
 				var data []byte
