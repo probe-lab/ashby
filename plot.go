@@ -280,7 +280,7 @@ func parsePlotDef(fname string, content []byte) (*PlotDef, error) {
 		}
 
 		switch s.DeltaType {
-		case DeltaTypeNone, DeltaTypeRelative:
+		case DeltaTypeNone, DeltaTypeRelative, DeltaTypeAbsolute:
 		default:
 			return nil, fmt.Errorf("unknown scalar delta type: %q", s.DeltaType)
 		}
@@ -293,7 +293,7 @@ func parsePlotDef(fname string, content []byte) (*PlotDef, error) {
 
 	for _, t := range pd.Tables {
 		switch t.Type {
-		case TableTypeHeatmap:
+		case TableTypeHeatmap, TableTypeCategoryBar, TableTypeMarkers:
 		default:
 			return nil, fmt.Errorf("unknown table type: %q", t.Type)
 		}

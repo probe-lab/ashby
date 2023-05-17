@@ -178,6 +178,7 @@ type DeltaType string
 const (
 	DeltaTypeNone     DeltaType = ""
 	DeltaTypeRelative DeltaType = "relative" // the delta is an absolute value and should be displayed with a relative % change to the scalar
+	DeltaTypeAbsolute DeltaType = "absolute" // the delta is an absolute value and should be displayed with a relative % change to the scalar
 )
 
 func (t DeltaType) String() string { return string(t) }
@@ -243,14 +244,18 @@ type TableDef struct {
 	LabelsX  string                `yaml:"xLabels"`
 	LabelsY  string                `yaml:"yLabels"`
 	Values   string                `yaml:"values"`
+	Color    string                `yaml:"color"`
 	Colorbar *grob.HeatmapColorbar `yaml:"colorbar"`
+	Yaxis    string                `yaml:"yaxis"`
 	order    int                   // used for retaining ordering of series
 }
 
 type TableType string
 
 const (
-	TableTypeHeatmap TableType = "heatmap"
+	TableTypeHeatmap     TableType = "heatmap"
+	TableTypeCategoryBar TableType = "category+bar"
+	TableTypeMarkers     TableType = "markers"
 )
 
 func (t TableType) String() string { return string(t) }

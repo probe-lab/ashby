@@ -364,22 +364,27 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 				case DeltaTypeRelative:
 					trace.Delta = &grob.IndicatorDelta{
 						Reference:   dv,
-						Relative:    grob.True,
+						Relative:    grob.False,
 						Valueformat: ".2%",
 					}
-					trace.Mode = "number+delta"
-					if c := cfg.MaybeLookupColor(s.IncreaseColor, ""); c != "" {
-						trace.Delta.Increasing = &grob.IndicatorDeltaIncreasing{
-							Color: c,
-						}
-					}
-					if c := cfg.MaybeLookupColor(s.DecreaseColor, ""); c != "" {
-						trace.Delta.Decreasing = &grob.IndicatorDeltaDecreasing{
-							Color: c,
-						}
+				case DeltaTypeAbsolute:
+					trace.Delta = &grob.IndicatorDelta{
+						Reference: dv,
+						Relative:  grob.False,
 					}
 				default:
 					return nil, fmt.Errorf("unsupported delta type: %s", s.DeltaType)
+				}
+				trace.Mode = "number+delta"
+				if c := cfg.MaybeLookupColor(s.IncreaseColor, ""); c != "" {
+					trace.Delta.Increasing = &grob.IndicatorDeltaIncreasing{
+						Color: c,
+					}
+				}
+				if c := cfg.MaybeLookupColor(s.DecreaseColor, ""); c != "" {
+					trace.Delta.Decreasing = &grob.IndicatorDeltaDecreasing{
+						Color: c,
+					}
 				}
 			}
 
@@ -517,9 +522,61 @@ func tableTraces(dataSets map[string]DataSet, tablesDefs []TableDef, cfg *PlotCo
 					Colorscale:   "Viridis",
 					Colorbar:     lt.TableDef.Colorbar,
 					Reversescale: grob.Bool(&reverseScale),
+					Yaxis:        lt.TableDef.Yaxis,
 				}
 				traces = append(traces, trace)
 				annotations = append(annotations, lt.Annotations()...)
+			case TableTypeCategoryBar:
+				xLabels := [][]any{}
+				xLabels = append(xLabels, []any{}, []any{})
+				yValues := []any{}
+				for _, xLabel := range lt.LabelsX {
+					for _, yLabel := range lt.LabelsY {
+						xLabels[0] = append(xLabels[0], xLabel)
+						xLabels[1] = append(xLabels[1], yLabel)
+						yValues = append(yValues, lt.Values[xLabel][yLabel])
+					}
+				}
+				trace := &grob.Bar{
+					Type:  grob.TraceTypeBar,
+					Name:  lt.Name,
+					X:     xLabels,
+					Y:     yValues,
+					Yaxis: lt.TableDef.Yaxis,
+				}
+
+				if c := cfg.MaybeLookupColor(lt.TableDef.Color, lt.Name); c != "" {
+					trace.Marker = &grob.BarMarker{
+						Color: c,
+					}
+				}
+				traces = append(traces, trace)
+			case TableTypeMarkers:
+				xLabels := [][]any{}
+				xLabels = append(xLabels, []any{}, []any{})
+				yValues := []any{}
+				for _, xLabel := range lt.LabelsX {
+					for _, yLabel := range lt.LabelsY {
+						xLabels[0] = append(xLabels[0], xLabel)
+						xLabels[1] = append(xLabels[1], yLabel)
+						yValues = append(yValues, lt.Values[xLabel][yLabel])
+					}
+				}
+				trace := &grob.Scatter{
+					Type:  grob.TraceTypeScatter,
+					Name:  lt.Name,
+					X:     xLabels,
+					Y:     yValues,
+					Mode:  grob.ScatterModeMarkers,
+					Yaxis: lt.TableDef.Yaxis,
+				}
+				if c := cfg.MaybeLookupColor(lt.TableDef.Color, lt.Name); c != "" {
+					trace.Marker = &grob.ScatterMarker{
+						Color: c,
+					}
+				}
+				traces = append(traces, trace)
+
 			default:
 				return nil, nil, fmt.Errorf("unsupported table type: %s", lt.TableDef.Type)
 			}
