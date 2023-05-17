@@ -259,7 +259,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 
 				templated, err := ExecuteTemplate(ctx, string(fcontent), cfg)
 				if err != nil {
-					return fmt.Errorf("failed to execute templates for plot definition: %w", err)
+					return fmt.Errorf("failed to execute templates for plot definition %q: %w", fname, err)
 				}
 
 				pd, err := parsePlotDef(fname, []byte(templated))
