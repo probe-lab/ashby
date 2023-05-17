@@ -127,13 +127,12 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 	}
 
 	// data is ordered in the same way as the definition
-	// TODO: fix ordering
+	data := make([]*LabeledSeries, 0)
+	dataIndex := make(map[string]*LabeledSeries)
+
 	// if series are generated from a groupfield then it uses that ordering
 	for dsname, series := range seriesByDataSet {
 		ds := dataSets[dsname]
-
-		data := make([]*LabeledSeries, 0)
-		dataIndex := make(map[string]*LabeledSeries)
 
 		logger.Info("reading dataset", "dataset", dsname)
 		ds.ResetIterator()
@@ -175,103 +174,102 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 			return nil, fmt.Errorf("dataset iteration ended with an error: %w", ds.Err())
 		}
 		logger.Info("finished reading dataset", "dataset", dsname, "rowcount", rowcount)
+	}
 
-		sort.Slice(data, func(i, j int) bool {
-			if data[i].SeriesDef.order != data[j].SeriesDef.order {
-				return data[i].SeriesDef.order < data[j].SeriesDef.order
-			}
-			return data[i].Name < data[j].Name
-		})
-
-		for _, ls := range data {
-			ls := ls
-			switch ls.SeriesDef.Type {
-			case SeriesTypeBar:
-				trace := &grob.Bar{
-					Type:          grob.TraceTypeBar,
-					Name:          ls.Name,
-					Orientation:   grob.BarOrientationV,
-					X:             ls.Labels,
-					Y:             ls.Values,
-					Hovertemplate: ls.SeriesDef.HoverTemplate,
-				}
-
-				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
-					trace.Marker = &grob.BarMarker{
-						Color: c,
-					}
-				}
-
-				traces = append(traces, trace)
-			case SeriesTypeHBar:
-				trace := &grob.Bar{
-					Type:        grob.TraceTypeBar,
-					Name:        ls.Name,
-					Orientation: grob.BarOrientationH,
-					X:           ls.Values,
-					Y:           ls.Labels,
-				}
-				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
-					trace.Marker = &grob.BarMarker{
-						Color: c,
-					}
-				}
-
-				traces = append(traces, trace)
-			case SeriesTypeLine:
-				trace := &grob.Scatter{
-					Type:   grob.TraceTypeScatter,
-					Name:   ls.Name,
-					X:      ls.Labels,
-					Y:      ls.Values,
-					Mode:   "lines",
-					Marker: &grob.ScatterMarker{},
-				}
-
-				if ls.SeriesDef.Fill == FillTypeToZero {
-					trace.Fill = "tozeroy"
-				}
-
-				if ls.SeriesDef.Marker != MarkerTypeNone {
-					trace.Mode = "lines+markers"
-					trace.Marker.Symbol = ls.SeriesDef.Marker
-				}
-
-				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
-					trace.Marker.Color = c
-				}
-				traces = append(traces, trace)
-			case SeriesTypeBox:
-				trace := &grob.Box{
-					Type: grob.TraceTypeBox,
-					Name: ls.Name,
-					Y:    ls.Values,
-				}
-
-				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
-					trace.Marker = &grob.BoxMarker{
-						Color: c,
-					}
-				}
-				traces = append(traces, trace)
-			case SeriesTypeHBox:
-				trace := &grob.Box{
-					Type: grob.TraceTypeBox,
-					Name: ls.Name,
-					X:    ls.Values,
-				}
-
-				if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
-					trace.Marker = &grob.BoxMarker{
-						Color: c,
-					}
-				}
-				traces = append(traces, trace)
-			default:
-				return nil, fmt.Errorf("unsupported series type: %s", ls.SeriesDef.Type)
-			}
+	sort.Slice(data, func(i, j int) bool {
+		if data[i].SeriesDef.order != data[j].SeriesDef.order {
+			return data[i].SeriesDef.order < data[j].SeriesDef.order
 		}
+		return data[i].Name < data[j].Name
+	})
 
+	for _, ls := range data {
+		ls := ls
+		switch ls.SeriesDef.Type {
+		case SeriesTypeBar:
+			trace := &grob.Bar{
+				Type:          grob.TraceTypeBar,
+				Name:          ls.Name,
+				Orientation:   grob.BarOrientationV,
+				X:             ls.Labels,
+				Y:             ls.Values,
+				Hovertemplate: ls.SeriesDef.HoverTemplate,
+			}
+
+			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
+				trace.Marker = &grob.BarMarker{
+					Color: c,
+				}
+			}
+
+			traces = append(traces, trace)
+		case SeriesTypeHBar:
+			trace := &grob.Bar{
+				Type:        grob.TraceTypeBar,
+				Name:        ls.Name,
+				Orientation: grob.BarOrientationH,
+				X:           ls.Values,
+				Y:           ls.Labels,
+			}
+			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
+				trace.Marker = &grob.BarMarker{
+					Color: c,
+				}
+			}
+
+			traces = append(traces, trace)
+		case SeriesTypeLine:
+			trace := &grob.Scatter{
+				Type:   grob.TraceTypeScatter,
+				Name:   ls.Name,
+				X:      ls.Labels,
+				Y:      ls.Values,
+				Mode:   "lines",
+				Marker: &grob.ScatterMarker{},
+			}
+
+			if ls.SeriesDef.Fill == FillTypeToZero {
+				trace.Fill = "tozeroy"
+			}
+
+			if ls.SeriesDef.Marker != MarkerTypeNone {
+				trace.Mode = "lines+markers"
+				trace.Marker.Symbol = ls.SeriesDef.Marker
+			}
+
+			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
+				trace.Marker.Color = c
+			}
+			traces = append(traces, trace)
+		case SeriesTypeBox:
+			trace := &grob.Box{
+				Type: grob.TraceTypeBox,
+				Name: ls.Name,
+				Y:    ls.Values,
+			}
+
+			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
+				trace.Marker = &grob.BoxMarker{
+					Color: c,
+				}
+			}
+			traces = append(traces, trace)
+		case SeriesTypeHBox:
+			trace := &grob.Box{
+				Type: grob.TraceTypeBox,
+				Name: ls.Name,
+				X:    ls.Values,
+			}
+
+			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
+				trace.Marker = &grob.BoxMarker{
+					Color: c,
+				}
+			}
+			traces = append(traces, trace)
+		default:
+			return nil, fmt.Errorf("unsupported series type: %s", ls.SeriesDef.Type)
+		}
 	}
 
 	return traces, nil
