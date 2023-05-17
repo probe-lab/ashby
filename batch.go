@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 )
+
+var reBasisOffset = regexp.MustCompile(`^-(\d+)([hdw])$`)
 
 var batchCommand = &cli.Command{
 	Name:   "batch",
@@ -52,7 +55,7 @@ var batchCommand = &cli.Command{
 			Name:        "basis",
 			Required:    false,
 			Value:       "now",
-			Usage:       "Basis time that should be passed to queries. Specify 'now' or a valid date in the past in RFC3339 or Unix timestamp format.",
+			Usage:       "Basis time that should be passed to queries. Specify 'now', a valid date in the past in RFC3339 or Unix timestamp format or an offset from the current date in hours (e.g. -2h), days (e.g. -4d) or weeks (e.g. -1w).",
 			Destination: &batchOpts.basis,
 		},
 		&cli.BoolFlag{
@@ -115,6 +118,27 @@ func Batch(cc *cli.Context) error {
 
 	if batchOpts.basis == "now" {
 		cfg.BasisTime = time.Now()
+	} else if offsetMatches := reBasisOffset.FindStringSubmatch(batchOpts.basis); offsetMatches != nil {
+		if len(offsetMatches) != 3 {
+			return fmt.Errorf("invalid basis offset")
+		}
+		var offset time.Duration
+
+		n, err := strconv.Atoi(offsetMatches[1])
+		if err != nil {
+			return fmt.Errorf("invalid basis offset value: %w", err)
+		}
+		switch offsetMatches[2] {
+		case "h":
+			offset = -time.Hour * time.Duration(n)
+		case "d":
+			offset = -time.Hour * time.Duration(n) * 24
+		case "w":
+			offset = -time.Hour * time.Duration(n) * 24 * 7
+		default:
+			return fmt.Errorf("invalid basis offset unit: %q", offsetMatches[2])
+		}
+		cfg.BasisTime = time.Now().Add(offset)
 	} else {
 		var err error
 		ts, err := strconv.Atoi(batchOpts.basis)
