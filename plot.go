@@ -187,8 +187,9 @@ func Plot(cc *cli.Context) error {
 	}
 
 	figDat := FigureData{
-		Fig:    fig,
-		Params: pd.Parameters,
+		Fig:       fig,
+		Params:    pd.Parameters,
+		DynLayout: pd.DynLayout,
 	}
 
 	var data []byte

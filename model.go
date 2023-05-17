@@ -89,6 +89,7 @@ type PlotDef struct {
 	Layout     grob.Layout    `yaml:"layout"`
 	Config     grob.Config    `yaml:"config"`
 	Parameters map[string]any `yaml:"params"`
+	DynLayout  map[string]any `yaml:"dynamicLayout"`
 }
 
 type DataSetDef struct {
@@ -231,7 +232,8 @@ func (t ComputeType) String() string { return string(t) }
 
 type FigureData struct {
 	*grob.Fig
-	Params map[string]any `json:"params"`
+	Params    map[string]any `json:"params"`
+	DynLayout map[string]any `json:"dynamicLayout"`
 }
 
 type TableDef struct {
