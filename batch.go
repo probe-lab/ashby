@@ -229,6 +229,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 		err    error
 	)
 	if p.SourceIsDir() {
+		slog.Info("using plot definitions in " + p.Source)
 		infs = os.DirFS(p.Source)
 		fnames, err = fs.Glob(infs, "*.yaml")
 		if err != nil {
@@ -284,7 +285,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 				}
 				logger.Debug("plot filename", "filepath", plotFilename)
 
-				info, err := os.Lstat(filepath.Join(filepath.Dir(p.Source), fname))
+				info, err := stat(infs, fname)
 				if err != nil {
 					return err
 				}
@@ -432,4 +433,17 @@ func writeOutput(fname string, data []byte) error {
 		return fmt.Errorf("write file: %w", err)
 	}
 	return nil
+}
+
+func stat(fsys fs.FS, name string) (fs.FileInfo, error) {
+	if fsys, ok := fsys.(fs.StatFS); ok {
+		return fsys.Stat(name)
+	}
+
+	file, err := fsys.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return file.Stat()
 }
