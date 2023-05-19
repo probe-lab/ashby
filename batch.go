@@ -83,6 +83,12 @@ var batchCommand = &cli.Command{
 			Usage:       "Path of directory containing configuration.",
 			Destination: &batchOpts.confDir,
 		},
+		&cli.StringFlag{
+			Name:        "match",
+			Required:    false,
+			Usage:       "Only generate plotdefs that match this glob (use standard go glob syntax).",
+			Destination: &batchOpts.matchGlob,
+		},
 	}, loggingFlags...),
 }
 
@@ -97,6 +103,7 @@ var batchOpts struct {
 	force       bool
 	basis       string
 	concurrency int
+	matchGlob   string
 }
 
 func Batch(cc *cli.Context) error {
@@ -113,7 +120,8 @@ func Batch(cc *cli.Context) error {
 			"static": &StaticDataSource{},
 			"demo":   &DemoDataSource{},
 		},
-		Colors: map[string]string{},
+		Colors:    map[string]string{},
+		MatchGlob: batchOpts.matchGlob,
 	}
 
 	if batchOpts.basis == "now" {
@@ -228,16 +236,25 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 		fnames []string
 		err    error
 	)
+
+	matchGlob := "*.yaml"
+
 	if p.SourceIsDir() {
 		slog.Info("using plot definitions in " + p.Source)
 		infs = os.DirFS(p.Source)
-		fnames, err = fs.Glob(infs, "*.yaml")
-		if err != nil {
-			return fmt.Errorf("failed to read input directory: %w", err)
-		}
+		// fnames, err = fs.Glob(infs, "*.yaml")
 	} else {
 		infs = os.DirFS(filepath.Dir(p.Source))
-		fnames = []string{filepath.Base(p.Source)}
+		matchGlob = filepath.Base(p.Source)
+		// fnames = []string{filepath.Base(p.Source)}
+	}
+	if cfg.MatchGlob != "" {
+		fnames, err = fs.Glob(infs, cfg.MatchGlob)
+	} else {
+		fnames, err = fs.Glob(infs, matchGlob)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read input directory: %w", err)
 	}
 
 	for _, variant := range p.Variants {
@@ -251,6 +268,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 
 		for _, fname := range fnames {
 			fname := fname
+
 			grp.Go(func() error {
 				absOutDir, err := filepath.Abs(batchOpts.outDir)
 				if err != nil {

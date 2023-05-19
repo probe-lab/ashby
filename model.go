@@ -31,6 +31,8 @@ type PlotConfig struct {
 
 	// Profiles contains information about different variants of plot defs
 	Profiles []*ProcessingProfile
+
+	MatchGlob string
 }
 
 func (c *PlotConfig) MaybeLookupColor(name string, seriesName string) string {
