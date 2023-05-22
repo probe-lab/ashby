@@ -364,7 +364,7 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 				case DeltaTypeRelative:
 					trace.Delta = &grob.IndicatorDelta{
 						Reference:   dv,
-						Relative:    grob.False,
+						Relative:    grob.True,
 						Valueformat: ".2%",
 					}
 				case DeltaTypeAbsolute:
