@@ -93,7 +93,12 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 		return nil, fmt.Errorf("table traces: %w", err)
 	}
 	fig.Data = append(fig.Data, traces...)
-	fig.Layout.Annotations = annotations
+
+	if fig.Layout.Annotations == nil {
+		fig.Layout.Annotations = annotations
+	} else if existingAnnotations, ok := fig.Layout.Annotations.([]interface{}); ok {
+		fig.Layout.Annotations = append(existingAnnotations, annotations)
+	}
 
 	return fig, nil
 }
