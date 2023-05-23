@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -98,13 +99,13 @@ func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, 
 }
 
 type Annotation struct {
-	RefX      string                        `json:"xref"`
-	RefY      string                        `json:"yref"`
-	X         any                           `json:"x"`
-	Y         any                           `json:"y"`
-	Text      string                        `json:"text"`
-	Font      *grob.HeatmapglHoverlabelFont `json:"font"`
-	ShowArrow bool                          `json:"showarrow"`
+	RefX      string                   `json:"xref"`
+	RefY      string                   `json:"yref"`
+	X         any                      `json:"x"`
+	Y         any                      `json:"y"`
+	Text      string                   `json:"text"`
+	Font      *grob.IndicatorTitleFont `json:"font"`
+	ShowArrow bool                     `json:"showarrow"`
 }
 
 type LabeledSeries struct {
@@ -418,9 +419,38 @@ func (lt LabeledTable) ValueZ() [][]any {
 }
 
 func (lt LabeledTable) Annotations() []Annotation {
+	// determine the smallest and largest value
+	minVal := math.MaxFloat64
+	maxVal := -math.MaxFloat64
+	for _, yLabel := range lt.LabelsY {
+		for _, xLabel := range lt.LabelsX {
+			val, ok := lt.Values[xLabel][yLabel].(float64)
+			if !ok {
+				continue
+			}
+
+			if val > maxVal {
+				maxVal = val
+			}
+			if val < minVal {
+				minVal = val
+			}
+		}
+	}
+
+	// every value above this brightThreshold should get a bright color
+	brightThreshold := (maxVal - minVal) * 0.27
+
 	var annotations []Annotation
 	for _, yLabel := range lt.LabelsY {
 		for _, xLabel := range lt.LabelsX {
+
+			color := ""
+			val, ok := lt.Values[xLabel][yLabel].(float64)
+			if ok && val >= brightThreshold {
+				color = "#EEEEEE" // TODO: parametrize
+			}
+
 			annotations = append(annotations, Annotation{
 				RefX:      "x1",
 				RefY:      "y1",
@@ -428,6 +458,9 @@ func (lt LabeledTable) Annotations() []Annotation {
 				Y:         yLabel,
 				Text:      fmt.Sprintf("%.3f", lt.Values[xLabel][yLabel]),
 				ShowArrow: false,
+				Font: &grob.IndicatorTitleFont{
+					Color: grob.Color(color),
+				},
 			})
 		}
 	}
