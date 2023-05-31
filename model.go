@@ -89,7 +89,7 @@ type PlotDef struct {
 	Scalars    []ScalarDef    `yaml:"scalars"`
 	Tables     []TableDef     `yaml:"tables"`
 	Layout     grob.Layout    `yaml:"layout"`
-	Config     grob.Config    `yaml:"config"`
+	Config     map[string]any `yaml:"config"`
 	Parameters map[string]any `yaml:"params"`
 	DynLayout  map[string]any `yaml:"dynamicLayout"`
 }
@@ -114,6 +114,7 @@ type SeriesDef struct {
 	Percent       bool       `yaml:"percent"`
 	order         int        // used for retaining ordering of series
 	HoverTemplate string     `json:"hovertemplate,omitempty"`
+	Visible       bool       `json:"visible"`
 }
 
 type SeriesType string
@@ -153,24 +154,26 @@ const (
 func (t MarkerType) String() string { return string(t) }
 
 type ScalarDef struct {
-	Type          ScalarType `yaml:"type"`
-	Name          string     `yaml:"name"` // name of the scalar
-	Color         string     `yaml:"color"`
-	DataSet       string     `yaml:"dataset"`
-	Value         string     `yaml:"value"`         // the name of the field in the dataset that should be used for the scalar value
-	ValueSuffix   string     `yaml:"valueSuffix"`   // a string to append after the value
-	ValuePrefix   string     `yaml:"valuePrefix"`   // a string to prepend to the value
-	DeltaDataSet  string     `yaml:"deltaDataset"`  // the name of a dataset to use for a delta value
-	DeltaValue    string     `yaml:"deltaValue"`    // the name of the field in the delta dataset that should be used for the scalar value
-	DeltaType     DeltaType  `yaml:"deltaType"`     // the type of delta contained in the value field
-	IncreaseColor string     `yaml:"increaseColor"` // the color to use for delta that show an increase
-	DecreaseColor string     `yaml:"decreaseColor"` // the color to use for delta that show an increase
+	Type          ScalarType           `yaml:"type"`
+	Name          string               `yaml:"name"` // name of the scalar
+	Color         string               `yaml:"color"`
+	DataSet       string               `yaml:"dataset"`
+	Value         string               `yaml:"value"`         // the name of the field in the dataset that should be used for the scalar value
+	ValueSuffix   string               `yaml:"valueSuffix"`   // a string to append after the value
+	ValuePrefix   string               `yaml:"valuePrefix"`   // a string to prepend to the value
+	DeltaDataSet  string               `yaml:"deltaDataset"`  // the name of a dataset to use for a delta value
+	DeltaValue    string               `yaml:"deltaValue"`    // the name of the field in the delta dataset that should be used for the scalar value
+	DeltaType     DeltaType            `yaml:"deltaType"`     // the type of delta contained in the value field
+	IncreaseColor string               `yaml:"increaseColor"` // the color to use for delta that show an increase
+	DecreaseColor string               `yaml:"decreaseColor"` // the color to use for delta that show an increase
+	Gauge         *grob.IndicatorGauge `yaml:"gauge"`         // gauge configuration
 }
 
 type ScalarType string
 
 const (
 	ScalarTypeNumber ScalarType = "number" // display the scalar value as a number
+	ScalarTypeGauge  ScalarType = "gauge"  // display the scalar value as a gauge
 )
 
 func (t ScalarType) String() string { return string(t) }
@@ -237,6 +240,7 @@ type FigureData struct {
 	*grob.Fig
 	Params    map[string]any `json:"params"`
 	DynLayout map[string]any `json:"dynamicLayout"`
+	Config    map[string]any `json:"config"`
 }
 
 type TableDef struct {

@@ -190,6 +190,7 @@ func Plot(cc *cli.Context) error {
 		Fig:       fig,
 		Params:    pd.Parameters,
 		DynLayout: pd.DynLayout,
+		Config:    pd.Config,
 	}
 
 	var data []byte
@@ -215,7 +216,7 @@ func Plot(cc *cli.Context) error {
 	fmt.Fprintln(out, string(data))
 
 	if plotOpts.preview {
-		if err := preview(fig); err != nil {
+		if err := preview(figDat); err != nil {
 			return fmt.Errorf("preview plot: %w", err)
 		}
 	}
@@ -274,7 +275,7 @@ func parsePlotDef(fname string, content []byte) (*PlotDef, error) {
 
 	for _, s := range pd.Scalars {
 		switch s.Type {
-		case ScalarTypeNumber:
+		case ScalarTypeNumber, ScalarTypeGauge:
 		default:
 			return nil, fmt.Errorf("unknown scalar type: %q", s.Type)
 		}
