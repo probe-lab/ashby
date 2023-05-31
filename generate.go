@@ -16,7 +16,6 @@ import (
 func generateFig(ctx context.Context, pd *PlotDef, cfg *PlotConfig) (*grob.Fig, error) {
 	fig := &grob.Fig{
 		Layout: &pd.Layout,
-		Config: &pd.Config,
 	}
 
 	logger := slog.With("name", pd.Name)
@@ -200,6 +199,7 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				X:             ls.Labels,
 				Y:             ls.Values,
 				Hovertemplate: ls.SeriesDef.HoverTemplate,
+				Visible:       ls.SeriesDef.Visible,
 			}
 
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
@@ -216,6 +216,7 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				Orientation: grob.BarOrientationH,
 				X:           ls.Values,
 				Y:           ls.Labels,
+				Visible:     ls.SeriesDef.Visible,
 			}
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
 				trace.Marker = &grob.BarMarker{
@@ -226,12 +227,13 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 			traces = append(traces, trace)
 		case SeriesTypeLine:
 			trace := &grob.Scatter{
-				Type:   grob.TraceTypeScatter,
-				Name:   ls.Name,
-				X:      ls.Labels,
-				Y:      ls.Values,
-				Mode:   "lines",
-				Marker: &grob.ScatterMarker{},
+				Type:    grob.TraceTypeScatter,
+				Name:    ls.Name,
+				X:       ls.Labels,
+				Y:       ls.Values,
+				Mode:    "lines",
+				Marker:  &grob.ScatterMarker{},
+				Visible: ls.SeriesDef.Visible,
 			}
 
 			if ls.SeriesDef.Fill == FillTypeToZero {
@@ -249,9 +251,10 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 			traces = append(traces, trace)
 		case SeriesTypeBox:
 			trace := &grob.Box{
-				Type: grob.TraceTypeBox,
-				Name: ls.Name,
-				Y:    ls.Values,
+				Type:    grob.TraceTypeBox,
+				Name:    ls.Name,
+				Y:       ls.Values,
+				Visible: ls.SeriesDef.Visible,
 			}
 
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
@@ -262,9 +265,10 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 			traces = append(traces, trace)
 		case SeriesTypeHBox:
 			trace := &grob.Box{
-				Type: grob.TraceTypeBox,
-				Name: ls.Name,
-				X:    ls.Values,
+				Type:    grob.TraceTypeBox,
+				Name:    ls.Name,
+				X:       ls.Values,
+				Visible: ls.SeriesDef.Visible,
 			}
 
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
@@ -335,9 +339,10 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 
 	domainX := 1.0 / float64(len(scalarDefs))
 	for idx, s := range scalarDefs {
+		var trace *grob.Indicator
 		switch s.Type {
 		case ScalarTypeNumber:
-			trace := &grob.Indicator{
+			trace = &grob.Indicator{
 				Type: grob.TraceTypeIndicator,
 				Name: s.Name,
 				Mode: "number",
@@ -353,52 +358,72 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 				},
 			}
 
-			v, ok := dsValues[s.DataSet][s.Value]
-			if !ok {
-				logger.Error(fmt.Sprintf("missing value field for scalar %s", s.Name))
-				continue
+			if s.DeltaDataSet != "" {
+				trace.Mode = "number+delta"
 			}
-			trace.Value = v
+		case ScalarTypeGauge:
+			trace = &grob.Indicator{
+				Type: grob.TraceTypeIndicator,
+				Name: s.Name,
+				Mode: "gauge+number",
+				Number: &grob.IndicatorNumber{
+					Suffix: s.ValueSuffix,
+				},
+				Title: &grob.IndicatorTitle{
+					Text: s.Name,
+				},
+				Gauge: s.Gauge,
+			}
 
 			if s.DeltaDataSet != "" {
-				dv, ok := dsValues[s.DeltaDataSet][s.DeltaValue]
-				if !ok {
-					logger.Error(fmt.Sprintf("missing delta value field for scalar %s", s.Name))
-					continue
-				}
-				switch s.DeltaType {
-				case DeltaTypeRelative:
-					trace.Delta = &grob.IndicatorDelta{
-						Reference:   dv,
-						Relative:    grob.True,
-						Valueformat: ".2%",
-					}
-				case DeltaTypeAbsolute:
-					trace.Delta = &grob.IndicatorDelta{
-						Reference: dv,
-						Relative:  grob.False,
-					}
-				default:
-					return nil, fmt.Errorf("unsupported delta type: %s", s.DeltaType)
-				}
-				trace.Mode = "number+delta"
-				if c := cfg.MaybeLookupColor(s.IncreaseColor, ""); c != "" {
-					trace.Delta.Increasing = &grob.IndicatorDeltaIncreasing{
-						Color: c,
-					}
-				}
-				if c := cfg.MaybeLookupColor(s.DecreaseColor, ""); c != "" {
-					trace.Delta.Decreasing = &grob.IndicatorDeltaDecreasing{
-						Color: c,
-					}
-				}
+				trace.Mode = "gauge+number+delta"
 			}
 
-			traces = append(traces, trace)
 		default:
 			return nil, fmt.Errorf("unsupported scalar type: %s", s.Type)
-
 		}
+
+		v, ok := dsValues[s.DataSet][s.Value]
+		if !ok {
+			logger.Error(fmt.Sprintf("missing value field for scalar %s", s.Name))
+			continue
+		}
+		trace.Value = v
+
+		if s.DeltaDataSet != "" {
+			dv, ok := dsValues[s.DeltaDataSet][s.DeltaValue]
+			if !ok {
+				logger.Error(fmt.Sprintf("missing delta value field for scalar %s", s.Name))
+				continue
+			}
+			switch s.DeltaType {
+			case DeltaTypeRelative:
+				trace.Delta = &grob.IndicatorDelta{
+					Reference:   dv,
+					Relative:    grob.True,
+					Valueformat: ".2%",
+				}
+			case DeltaTypeAbsolute:
+				trace.Delta = &grob.IndicatorDelta{
+					Reference: dv,
+					Relative:  grob.False,
+				}
+			default:
+				return nil, fmt.Errorf("unsupported delta type: %s", s.DeltaType)
+			}
+			if c := cfg.MaybeLookupColor(s.IncreaseColor, ""); c != "" {
+				trace.Delta.Increasing = &grob.IndicatorDeltaIncreasing{
+					Color: c,
+				}
+			}
+			if c := cfg.MaybeLookupColor(s.DecreaseColor, ""); c != "" {
+				trace.Delta.Decreasing = &grob.IndicatorDeltaDecreasing{
+					Color: c,
+				}
+			}
+		}
+
+		traces = append(traces, trace)
 	}
 	return traces, nil
 }

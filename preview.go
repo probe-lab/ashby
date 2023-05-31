@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"html/template"
 
-	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"github.com/pkg/browser"
 )
 
-func preview(fig *grob.Fig) error {
+func preview(fig FigureData) error {
 	figBytes, err := json.Marshal(fig)
 	if err != nil {
 		return fmt.Errorf("marshal fig: %w", err)
@@ -51,7 +50,7 @@ var baseHtml = `
       </div>
       
       <script>
-        data = JSON.parse('{{ . }}')
+        const data = JSON.parse('{{ . }}')
          
         Plotly.newPlot('plot', data);
 
