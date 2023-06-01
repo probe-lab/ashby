@@ -190,6 +190,11 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 
 	for _, ls := range data {
 		ls := ls
+		visible := true
+		if ls.SeriesDef.Visible != nil {
+			visible = *ls.SeriesDef.Visible
+		}
+
 		switch ls.SeriesDef.Type {
 		case SeriesTypeBar:
 			trace := &grob.Bar{
@@ -199,7 +204,8 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				X:             ls.Labels,
 				Y:             ls.Values,
 				Hovertemplate: ls.SeriesDef.HoverTemplate,
-				Visible:       ls.SeriesDef.Visible,
+				Visible:       visible,
+				Yaxis:         ls.SeriesDef.Yaxis,
 			}
 
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
@@ -216,7 +222,8 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				Orientation: grob.BarOrientationH,
 				X:           ls.Values,
 				Y:           ls.Labels,
-				Visible:     ls.SeriesDef.Visible,
+				Visible:     visible,
+				Yaxis:       ls.SeriesDef.Yaxis,
 			}
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
 				trace.Marker = &grob.BarMarker{
@@ -233,7 +240,8 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				Y:       ls.Values,
 				Mode:    "lines",
 				Marker:  &grob.ScatterMarker{},
-				Visible: ls.SeriesDef.Visible,
+				Visible: visible,
+				Yaxis:   ls.SeriesDef.Yaxis,
 			}
 
 			if ls.SeriesDef.Fill == FillTypeToZero {
@@ -249,12 +257,36 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				trace.Marker.Color = c
 			}
 			traces = append(traces, trace)
+		case SeriesTypeScatter:
+			trace := &grob.Scatter{
+				Type: grob.TraceTypeScatter,
+				Name: ls.Name,
+				X:    ls.Labels,
+				Y:    ls.Values,
+				Mode: "markers",
+				Marker: &grob.ScatterMarker{
+					Symbol: MarkerTypeCircle,
+				},
+				Visible: visible,
+				Yaxis:   ls.SeriesDef.Yaxis,
+			}
+
+			if ls.SeriesDef.Fill == FillTypeToZero {
+				trace.Fill = "tozeroy"
+			}
+
+			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
+				trace.Marker.Color = c
+			}
+
+			traces = append(traces, trace)
 		case SeriesTypeBox:
 			trace := &grob.Box{
 				Type:    grob.TraceTypeBox,
 				Name:    ls.Name,
 				Y:       ls.Values,
-				Visible: ls.SeriesDef.Visible,
+				Visible: visible,
+				Yaxis:   ls.SeriesDef.Yaxis,
 			}
 
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
@@ -268,7 +300,8 @@ func seriesTraces(dataSets map[string]DataSet, seriesDefs []SeriesDef, cfg *Plot
 				Type:    grob.TraceTypeBox,
 				Name:    ls.Name,
 				X:       ls.Values,
-				Visible: ls.SeriesDef.Visible,
+				Visible: visible,
+				Yaxis:   ls.SeriesDef.Yaxis,
 			}
 
 			if c := cfg.MaybeLookupColor(ls.SeriesDef.Color, ls.Name); c != "" {
@@ -340,8 +373,19 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 	domainX := 1.0 / float64(len(scalarDefs))
 	for idx, s := range scalarDefs {
 		var trace *grob.Indicator
+		visible := true
+		if s.Visible != nil {
+			visible = *s.Visible
+		}
 		switch s.Type {
 		case ScalarTypeNumber:
+			domain := &grob.IndicatorDomain{
+				Column: int64(idx),
+				X:      []float64{domainX * float64(idx), domainX * float64(idx+1)},
+			}
+			if s.Domain != nil {
+				domain = s.Domain
+			}
 			trace = &grob.Indicator{
 				Type: grob.TraceTypeIndicator,
 				Name: s.Name,
@@ -349,13 +393,11 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 				Number: &grob.IndicatorNumber{
 					Suffix: s.ValueSuffix,
 				},
-				Domain: &grob.IndicatorDomain{
-					Column: int64(idx),
-					X:      []float64{domainX * float64(idx), domainX * float64(idx+1)},
-				},
+				Domain: domain,
 				Title: &grob.IndicatorTitle{
 					Text: s.Name,
 				},
+				Visible: visible,
 			}
 
 			if s.DeltaDataSet != "" {
@@ -372,7 +414,9 @@ func scalarTraces(dataSets map[string]DataSet, scalarDefs []ScalarDef, cfg *Plot
 				Title: &grob.IndicatorTitle{
 					Text: s.Name,
 				},
-				Gauge: s.Gauge,
+				Gauge:   s.Gauge,
+				Visible: visible,
+				Domain:  s.Domain,
 			}
 
 			if s.DeltaDataSet != "" {

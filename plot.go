@@ -261,7 +261,7 @@ func parsePlotDef(fname string, content []byte) (*PlotDef, error) {
 
 	for _, s := range pd.Series {
 		switch s.Type {
-		case SeriesTypeBar, SeriesTypeHBar, SeriesTypeLine, SeriesTypeBox, SeriesTypeHBox:
+		case SeriesTypeBar, SeriesTypeHBar, SeriesTypeLine, SeriesTypeScatter, SeriesTypeBox, SeriesTypeHBox:
 		default:
 			return nil, fmt.Errorf("unknown series type: %q", s.Type)
 		}

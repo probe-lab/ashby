@@ -113,18 +113,20 @@ type SeriesDef struct {
 	GroupValue    string     `yaml:"groupvalue"` // optional value of a field the series should use for grouping into related series
 	Percent       bool       `yaml:"percent"`
 	order         int        // used for retaining ordering of series
-	HoverTemplate string     `json:"hovertemplate,omitempty"`
-	Visible       bool       `json:"visible"`
+	HoverTemplate string     `yaml:"hovertemplate,omitempty"`
+	Visible       *bool      `yaml:"visible"`
+	Yaxis         string     `yaml:"yaxis"`
 }
 
 type SeriesType string
 
 const (
-	SeriesTypeBar  SeriesType = "bar"  // vertical bars
-	SeriesTypeHBar SeriesType = "hbar" // horizontal bars
-	SeriesTypeLine SeriesType = "line" // lines
-	SeriesTypeBox  SeriesType = "box"  // vertical box plot
-	SeriesTypeHBox SeriesType = "hbox" // horizontal box plot
+	SeriesTypeBar     SeriesType = "bar"     // vertical bars
+	SeriesTypeHBar    SeriesType = "hbar"    // horizontal bars
+	SeriesTypeLine    SeriesType = "line"    // lines
+	SeriesTypeScatter SeriesType = "scatter" // scatter
+	SeriesTypeBox     SeriesType = "box"     // vertical box plot
+	SeriesTypeHBox    SeriesType = "hbox"    // horizontal box plot
 )
 
 func (t SeriesType) String() string { return string(t) }
@@ -154,19 +156,21 @@ const (
 func (t MarkerType) String() string { return string(t) }
 
 type ScalarDef struct {
-	Type          ScalarType           `yaml:"type"`
-	Name          string               `yaml:"name"` // name of the scalar
-	Color         string               `yaml:"color"`
-	DataSet       string               `yaml:"dataset"`
-	Value         string               `yaml:"value"`         // the name of the field in the dataset that should be used for the scalar value
-	ValueSuffix   string               `yaml:"valueSuffix"`   // a string to append after the value
-	ValuePrefix   string               `yaml:"valuePrefix"`   // a string to prepend to the value
-	DeltaDataSet  string               `yaml:"deltaDataset"`  // the name of a dataset to use for a delta value
-	DeltaValue    string               `yaml:"deltaValue"`    // the name of the field in the delta dataset that should be used for the scalar value
-	DeltaType     DeltaType            `yaml:"deltaType"`     // the type of delta contained in the value field
-	IncreaseColor string               `yaml:"increaseColor"` // the color to use for delta that show an increase
-	DecreaseColor string               `yaml:"decreaseColor"` // the color to use for delta that show an increase
-	Gauge         *grob.IndicatorGauge `yaml:"gauge"`         // gauge configuration
+	Type          ScalarType            `yaml:"type"`
+	Name          string                `yaml:"name"` // name of the scalar
+	Color         string                `yaml:"color"`
+	DataSet       string                `yaml:"dataset"`
+	Value         string                `yaml:"value"`         // the name of the field in the dataset that should be used for the scalar value
+	ValueSuffix   string                `yaml:"valueSuffix"`   // a string to append after the value
+	ValuePrefix   string                `yaml:"valuePrefix"`   // a string to prepend to the value
+	DeltaDataSet  string                `yaml:"deltaDataset"`  // the name of a dataset to use for a delta value
+	DeltaValue    string                `yaml:"deltaValue"`    // the name of the field in the delta dataset that should be used for the scalar value
+	DeltaType     DeltaType             `yaml:"deltaType"`     // the type of delta contained in the value field
+	IncreaseColor string                `yaml:"increaseColor"` // the color to use for delta that show an increase
+	DecreaseColor string                `yaml:"decreaseColor"` // the color to use for delta that show an decrease
+	Visible       *bool                 `yaml:"visible"`       // if this trace should be shown
+	Gauge         *grob.IndicatorGauge  `yaml:"gauge"`         // gauge configuration
+	Domain        *grob.IndicatorDomain `yaml:"domain"`
 }
 
 type ScalarType string
