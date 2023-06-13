@@ -31,12 +31,14 @@ var batchCommand = &cli.Command{
 			Required:    false,
 			Usage:       "Emit compact json instead of pretty-printed.",
 			Destination: &batchOpts.compact,
+			EnvVars:     []string{envPrefix + "COMPACT"},
 		},
 		&cli.BoolFlag{
 			Name:        "validate",
 			Required:    false,
 			Usage:       "Validate the input files without running queries.",
 			Destination: &batchOpts.validate,
+			EnvVars:     []string{envPrefix + "VALIDATE"},
 		},
 		&cli.StringSliceFlag{
 			Name:        "source",
@@ -50,6 +52,7 @@ var batchCommand = &cli.Command{
 			Required:    true,
 			Usage:       "Path of directory where plots should be written.",
 			Destination: &batchOpts.outDir,
+			EnvVars:     []string{envPrefix + "OUT"},
 		},
 		&cli.StringFlag{
 			Name:        "basis",
@@ -57,18 +60,21 @@ var batchCommand = &cli.Command{
 			Value:       "now",
 			Usage:       "Basis time that should be passed to queries. Specify 'now', a valid date in the past in RFC3339 or Unix timestamp format or an offset from the current date in hours (e.g. -2h), days (e.g. -4d) or weeks (e.g. -1w).",
 			Destination: &batchOpts.basis,
+			EnvVars:     []string{envPrefix + "BASIS"},
 		},
 		&cli.BoolFlag{
 			Name:        "version",
 			Required:    true,
 			Usage:       "Automatically version the plots by writing to a dated hierarchy.",
 			Destination: &batchOpts.version,
+			EnvVars:     []string{envPrefix + "VERSION"},
 		},
 		&cli.BoolFlag{
 			Name:        "force",
 			Required:    false,
 			Usage:       "Force generation of plots even if the plot output already exists.",
 			Destination: &batchOpts.force,
+			EnvVars:     []string{envPrefix + "FORCE"},
 		},
 		&cli.IntFlag{
 			Name:        "concurrency",
@@ -76,18 +82,21 @@ var batchCommand = &cli.Command{
 			Usage:       "Number of concurrent goroutines to use for generating plots.",
 			Destination: &batchOpts.concurrency,
 			Value:       6,
+			EnvVars:     []string{envPrefix + "CONCURRENCY"},
 		},
 		&cli.StringFlag{
 			Name:        "conf",
 			Required:    false,
 			Usage:       "Path of directory containing configuration.",
 			Destination: &batchOpts.confDir,
+			EnvVars:     []string{envPrefix + "CONF"},
 		},
 		&cli.StringFlag{
 			Name:        "match",
 			Required:    false,
 			Usage:       "Only generate plotdefs that match this glob (use standard go glob syntax).",
 			Destination: &batchOpts.matchGlob,
+			EnvVars:     []string{envPrefix + "MATCH"},
 		},
 	}, loggingFlags...),
 }
