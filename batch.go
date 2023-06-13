@@ -174,6 +174,11 @@ func Batch(cc *cli.Context) error {
 	}
 	cfg.BasisTime = cfg.BasisTime.UTC()
 	slog.Info("plots will be generated for time " + cfg.BasisTime.Format(time.RFC3339))
+	slog.Info("plot output directory: " + batchOpts.outDir)
+	slog.Info(fmt.Sprintf("using concurrency %d", batchOpts.concurrency))
+	if batchOpts.version {
+		slog.Info("plot output will be versioned")
+	}
 
 	for _, sopt := range batchOpts.sources.Value() {
 		name, url, ok := strings.Cut(sopt, "=")
@@ -193,6 +198,7 @@ func Batch(cc *cli.Context) error {
 	}
 
 	if batchOpts.confDir != "" {
+		slog.Info("reading config from: " + batchOpts.confDir)
 		conffs := os.DirFS(batchOpts.confDir)
 		colorConfContent, err := fs.ReadFile(conffs, "colors.yaml")
 		if err != nil {
