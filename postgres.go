@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,87 +45,28 @@ func (p *PgDataSource) GetDataSet(ctx context.Context, query string, params ...a
 		p.err = fmt.Errorf("unable to connect to database: %w", err)
 		return nil, fmt.Errorf("execute query: %w", err)
 	}
+	defer conn.Release()
 
 	rows, err := conn.Query(ctx, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("execute query: %w", err)
 	}
 
-	return &PgDataSet{
-		conn: conn,
-		rows: rows,
-	}, nil
-}
-
-var _ DataSet = (*PgDataSet)(nil)
-
-type PgDataSet struct {
-	conn       *pgxpool.Conn
-	rows       pgx.Rows
-	rowdata    []any
-	fields     map[string]int
-	cache      [][]any
-	usecache   bool
-	cacheindex int
-	err        error
-}
-
-func (s *PgDataSet) Next() bool {
-	if s.err != nil {
-		return false
-	}
-	s.rowdata = nil
-	if !s.usecache {
-		more := s.rows.Next()
-		if more {
-			return true
+	data := make(map[string][]any)
+	fds := rows.FieldDescriptions()
+	for rows.Next() {
+		vals, err := rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("read row values: %w", err)
 		}
-		s.conn.Release()
 
-		return false
-	}
-	s.cacheindex++
-	if s.cacheindex >= len(s.cache) {
-		return false
-	}
-	s.rowdata = s.cache[s.cacheindex]
-	return true
-}
-
-func (s *PgDataSet) Err() error {
-	if s.err != nil {
-		return s.err
-	}
-	return s.rows.Err()
-}
-
-func (s *PgDataSet) Field(name string) any {
-	if s.rowdata == nil {
-		s.rowdata, s.err = s.rows.Values()
-		if s.err != nil || s.rowdata == nil {
-			return nil
-		}
-		s.cache = append(s.cache, s.rowdata)
-	}
-	if s.fields == nil {
-		fds := s.rows.FieldDescriptions()
-		s.fields = make(map[string]int, len(fds))
 		for i, fd := range fds {
-			s.fields[fd.Name] = i
+			data[fd.Name] = append(data[fd.Name], vals[i])
 		}
 	}
-
-	col, ok := s.fields[name]
-	if !ok {
-		return errors.New("unknown field")
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("collect rows: %w", rows.Err())
 	}
 
-	return s.rowdata[col]
-}
-
-func (s *PgDataSet) ResetIterator() {
-	if s.cache != nil {
-		s.usecache = true
-		s.cacheindex = -1
-	}
+	return NewStaticDataSet(data), nil
 }
