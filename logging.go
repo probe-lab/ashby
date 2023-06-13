@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 
+	"github.com/iand/pontium/hlog"
+	"github.com/urfave/cli/v2"
 	"golang.org/x/exp/slog"
 )
 
@@ -19,8 +21,8 @@ var loggingFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:        "veryverbose",
 		EnvVars:     []string{envPrefix + "VERYVERBOSE"},
-	Aliases: []string{"vv"},
-	Usage:   "Set logging level more verbose to include debug level logs",
+		Aliases:     []string{"vv"},
+		Usage:       "Set logging level more verbose to include debug level logs",
 		Destination: &loggingOpts.VeryVerbose,
 	},
 	&cli.BoolFlag{
@@ -34,7 +36,9 @@ var loggingFlags = []cli.Flag{
 
 
 
-v	VeryVerbose bool
+var loggingOpts struct {
+	Verbose     bool
+	VeryVerbose bool
 	Hlog        bool
 }
 
