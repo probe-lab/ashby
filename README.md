@@ -71,7 +71,7 @@ An example plot spec:
 
 ## Templating
 
-Plot definitions may use Go's templating capabulities. 
+Plot definitions may use Go's templating capabilities. 
 Plot definition files are parsed and executed as a Go template before parsing into the final plot definition model.
 
 The following functions are available:
