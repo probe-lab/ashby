@@ -34,8 +34,6 @@ var loggingFlags = []cli.Flag{
 	},
 }
 
-
-
 var loggingOpts struct {
 	Verbose     bool
 	VeryVerbose bool
