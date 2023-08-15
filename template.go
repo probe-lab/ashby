@@ -13,12 +13,6 @@ import (
 )
 
 func ExecuteTemplate(ctx context.Context, source string, cfg *PlotConfig) (string, error) {
-	type ExecutionContext struct {
-		Now         time.Time
-		StartOfDay  time.Time
-		StartOfWeek time.Time
-	}
-
 	// See http://masterminds.github.io/sprig/
 	fm := sprig.FuncMap()
 	fm["timestamptz"] = pgTimestampTZ

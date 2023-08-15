@@ -70,27 +70,6 @@ func ComputeBinaryPredicate(ctx context.Context, pred BinaryPredicate, in1 Compu
 	return NewStaticDataSet(data), nil
 }
 
-func fieldValuesEqual(v1, v2 any) bool {
-	switch tv1 := v1.(type) {
-	case string:
-		switch tv2 := v2.(type) {
-		case string:
-			return tv1 == tv2
-		case time.Time:
-			return tv1 == tv2.Format(time.RFC3339)
-		}
-	case time.Time:
-		switch tv2 := v2.(type) {
-		case string:
-			return tv1.Format(time.RFC3339) == tv2
-		case time.Time:
-			return tv1.Equal(tv2)
-		}
-	}
-	slog.Error("cannot compare field types", "type1", fmt.Sprintf("%T", v1), "type2", fmt.Sprintf("%T", v2))
-	return false
-}
-
 func stringify(v any) string {
 	switch tv := v.(type) {
 	case string:

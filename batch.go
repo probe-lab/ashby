@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -423,30 +422,6 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 	}
 
 	return nil
-}
-
-func fileExists(fname string) (bool, error) {
-	_, err := os.Lstat(fname)
-	if err == nil {
-		return true, nil
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return true, fmt.Errorf("failed to stat file: %w", err)
-	}
-
-	return false, nil
-}
-
-func fileExistsAndIsNewerThan(fname string, ts time.Time) (bool, error) {
-	info, err := os.Lstat(fname)
-	if err == nil {
-		return info.ModTime().After(ts), nil
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return true, fmt.Errorf("failed to stat file: %w", err)
-	}
-
-	return false, nil
 }
 
 func writeOutput(fname string, data []byte) error {
