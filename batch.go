@@ -284,9 +284,12 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 			fname := fname
 
 			grp.Go(func() error {
+				// generally we should log errors and return nil otherwise all remaining plots in progress will be cancelled
+
 				absOutDir, err := filepath.Abs(batchOpts.outDir)
 				if err != nil {
-					return fmt.Errorf("failed to find output directory: %w", err)
+					slog.Error("failed to find output directory", "directory", batchOpts.outDir, "error", err)
+					return nil
 				}
 
 				org := Organizer{
@@ -297,34 +300,40 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 
 				fcontent, err := fs.ReadFile(infs, fname)
 				if err != nil {
-					return fmt.Errorf("failed to read plot definition %q: %w", fname, err)
+					slog.Error("failed to read plot definition", "filename", fname, "error", err)
+					return nil
 				}
 
 				templated, err := ExecuteTemplate(ctx, string(fcontent), cfg)
 				if err != nil {
-					return fmt.Errorf("failed to execute templates for plot definition %q: %w", fname, err)
+					slog.Error("failed to execute templates for plot definition", "filename", fname, "error", err)
+					return nil
 				}
 
 				pd, err := parsePlotDef(fname, []byte(templated))
 				if err != nil {
-					return fmt.Errorf("failed to parse plot definition %q: %w", fname, err)
+					slog.Error("failed to parse plot definition", "filename", fname, "error", err)
+					return nil
 				}
 
 				logger := slog.With("name", pd.Name)
 				plotFilename, err := org.Filepath(pd, cfg.BasisTime)
 				if err != nil {
-					return fmt.Errorf("plot filepath: %w", err)
+					logger.Error("failed to format output filename", "error", err)
+					return nil
 				}
 				logger.Debug("plot filename", "filepath", plotFilename)
 
 				info, err := stat(infs, fname)
 				if err != nil {
-					return err
+					logger.Error("failed to stat plot filename", "filename", fname, "error", err)
+					return nil
 				}
 
 				isMissingOrStale, err := org.IsStaleOrMissing(pd, cfg.BasisTime, info.ModTime())
 				if err != nil {
 					logger.Error("failed to determine if plot file needs writing", "error", err)
+					return nil
 				}
 
 				shouldWrite := batchOpts.force || isMissingOrStale
@@ -337,6 +346,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 				isLatest, err := org.IsLatest(pd, cfg.BasisTime)
 				if err != nil {
 					logger.Error("failed to determine if plot file is latest", "error", err)
+					return nil
 				}
 				if isLatest {
 					logger.Debug("plot is latest")
@@ -364,11 +374,11 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 				}
 
 				if !shouldWrite {
-					slog.Info("skipping plot, output already exists", "name", pd.Name)
+					logger.Info("skipping plot, output already exists")
 					return nil
 				}
 
-				slog.Info("generating plot", "name", pd.Name)
+				logger.Info("generating plot")
 				// set up a monitoring loop that reports progress for long running queries
 				done := make(chan struct{})
 				t := time.NewTicker(time.Minute)
@@ -378,7 +388,7 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 					for {
 						select {
 						case <-t.C:
-							slog.Info("still generating plot", "name", pd.Name, "elapsed", time.Since(start).Round(time.Second))
+							logger.Info("still generating plot", "elapsed", time.Since(start).Round(time.Second))
 						case <-done:
 							return
 						}
@@ -388,7 +398,8 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 				close(done) // stop the monitoring loop
 
 				if err != nil {
-					return fmt.Errorf("failed to generate plot %q: %w", pd.Name, err)
+					logger.Error("failed to generate plot", "error", err)
+					return nil
 				}
 
 				figDat := FigureData{
@@ -404,12 +415,14 @@ func (p *ProcessingProfile) processPlotDefs(ctx context.Context, cfg *PlotConfig
 					data, err = json.MarshalIndent(figDat, "", "  ")
 				}
 				if err != nil {
-					return fmt.Errorf("failed to marshal to json: %w", err)
+					logger.Error("failed to marshal to json", "error", err)
+					return nil
 				}
 
-				slog.Info("writing plot output", "name", pd.Name, "filename", plotFilename)
+				logger.Info("writing plot output", "filename", plotFilename)
 				if err := org.WritePlot(data, pd, cfg.BasisTime); err != nil {
-					return fmt.Errorf("failed to write plot: %w", err)
+					logger.Error("failed to write plot", "filename", plotFilename, "error", err)
+					return nil
 				}
 
 				return nil
