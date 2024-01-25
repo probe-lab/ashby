@@ -1,6 +1,6 @@
 # ashby
 
-`ashby` produces plots for the [ProbeLab CMI website](https://github.com/plprobelab/website)
+`ashby` produces plots for the [ProbeLab CMI website](https://github.com/probe-lab/website)
 
 Currently it only supports an interactive mode but the goal is to run it as a daemon and for it to 
 produce automatically plots on a schedule.

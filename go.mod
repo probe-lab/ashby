@@ -1,4 +1,4 @@
-module github.com/plprobelab/ashby
+module github.com/probe-lab/ashby
 
 go 1.20
 
