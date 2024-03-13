@@ -2,7 +2,6 @@ module github.com/probe-lab/ashby
 
 go 1.21
 
-
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/MetalBlueberry/go-plotly v0.4.0
