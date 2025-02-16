@@ -1,6 +1,6 @@
 module github.com/probe-lab/ashby
 
-go 1.22
+go 1.23
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
